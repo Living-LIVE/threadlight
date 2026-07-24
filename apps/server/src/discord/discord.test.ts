@@ -1,3 +1,4 @@
+import { PermissionFlagsBits } from "discord.js";
 import { describe, expect, it } from "vitest";
 import {
   ASK_THREADLIGHT_CONTEXT_NAME,
@@ -5,16 +6,20 @@ import {
   extractMentionPrompt,
   formatThreadlightResponse,
   getDiscordInstallUrl,
+  isAllowedDiscordLocation,
   PRAY_COMMAND_NAME,
   THREADLIGHT_COMMAND_NAME,
+  THREADLIGHT_DISCORD_PERMISSIONS,
+  THREADLIGHT_MODE_COMMAND_NAME,
 } from "./index.js";
 
 describe("Discord adapter", () => {
-  it("registers the two slash commands and message action", () => {
-    expect(discordCommands).toHaveLength(3);
+  it("registers the three slash commands and message action", () => {
+    expect(discordCommands).toHaveLength(4);
     expect(discordCommands.map((command) => command.name)).toEqual([
       THREADLIGHT_COMMAND_NAME,
       PRAY_COMMAND_NAME,
+      THREADLIGHT_MODE_COMMAND_NAME,
       ASK_THREADLIGHT_CONTEXT_NAME,
     ]);
   });
@@ -27,8 +32,20 @@ describe("Discord adapter", () => {
     expect(url.searchParams.get("client_id")).toBe("app-123");
     expect(url.searchParams.get("guild_id")).toBe("guild-456");
     expect(url.searchParams.get("disable_guild_select")).toBe("true");
-    expect(url.searchParams.get("permissions")).toBe("84992");
+    expect(url.searchParams.get("permissions")).toBe("274877991936");
     expect(url.searchParams.get("scope")).toBe("bot applications.commands");
+    expect(
+      BigInt(THREADLIGHT_DISCORD_PERMISSIONS) & PermissionFlagsBits.SendMessagesInThreads,
+    ).toBe(PermissionFlagsBits.SendMessagesInThreads);
+  });
+
+  it("allows a configured channel and its child threads only", () => {
+    const config = { token: "token", guildId: "guild-1", channelId: "channel-1" };
+
+    expect(isAllowedDiscordLocation(config, "guild-1", "channel-1")).toBe(true);
+    expect(isAllowedDiscordLocation(config, "guild-1", "thread-1", "channel-1")).toBe(true);
+    expect(isAllowedDiscordLocation(config, "guild-1", "thread-2", "channel-2")).toBe(false);
+    expect(isAllowedDiscordLocation(config, "guild-2", "channel-1")).toBe(false);
   });
 
   it("extracts only prompts that explicitly mention the bot", () => {

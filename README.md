@@ -63,6 +63,7 @@ required are:
 
 - View Channels
 - Send Messages
+- Send Messages in Threads
 - Embed Links
 - Read Message History
 - Use Application Commands
@@ -81,8 +82,22 @@ docker compose run --rm threadlight node apps/server/dist/register-commands.js
 ```
 
 Threadlight responds to `/threadlight`, `/pray`, the **Ask Threadlight** message action, and
-explicit bot mentions in the configured channel. It ignores direct messages, other servers,
-other channels, and messages from bots.
+explicit bot mentions. The configured channel and its child threads share the same participation
+policy while maintaining independent conversation context and timing. Threadlight ignores direct
+messages, other servers, unrelated channels, and messages from bots.
+
+Set `DISCORD_PARTICIPATION_MODE` to control ambient participation:
+
+- `shy`: only respond when explicitly invited.
+- `medium`: evaluate the conversation after a 20-second quiet window and respond when relevant,
+  with a three-minute ambient-response cooldown.
+- `high`: respond once to every eligible human text message. A response may omit Scripture when
+  a passage would feel forced.
+
+Administrators with Manage Server permission can inspect or temporarily change the effective
+mode with `/threadlight-mode`. High mode requires explicit confirmation, and command changes
+reset to the environment value when the service restarts. See
+[`docs/participation-modes.md`](docs/participation-modes.md) for the complete behavior contract.
 
 For startup-time command registration, set `DISCORD_REGISTER_COMMANDS=true`; leave it false after
 the first successful registration.
@@ -116,7 +131,8 @@ successful development build.
 ## Privacy and Safety
 
 - Message text is never written to application logs.
-- Context is fetched only after an explicit command, message action, or mention.
+- Shy mode fetches context only after an explicit invocation. Medium and High process recent
+  messages in the configured channel and its child threads without an explicit mention.
 - Conversation context is processed in memory and not persisted.
 - Urgent language triggers a deterministic care response before AI composition.
 - A failed live demo request is reported as a failure and never replaced with fixture output.

@@ -6,7 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { DEMO_SCENARIOS, type ThreadlightOrchestrator } from "@threadlight/core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getDiscordInstallUrl } from "./discord/index.js";
+import { getDiscordInstallUrl, type ParticipationStatus } from "./discord/index.js";
 import { competitionReadiness, type ThreadlightConfig } from "./env.js";
 
 const AuthorSchema = z.object({
@@ -38,6 +38,7 @@ type BuildAppOptions = {
       enabled: boolean;
       ready: boolean;
       state: string;
+      participation?: ParticipationStatus;
     };
   };
 };
@@ -79,11 +80,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       ready: !options.config.DISCORD_ENABLED,
       state: options.config.DISCORD_ENABLED ? "unknown" : "disabled",
     };
+    const participation = discord.participation ?? {
+      mode: options.config.DISCORD_PARTICIPATION_MODE,
+      quietWindowMs: options.config.DISCORD_AMBIENT_QUIET_SECONDS * 1_000,
+      cooldownMs: options.config.DISCORD_AMBIENT_COOLDOWN_SECONDS * 1_000,
+      maxQueueDepth: options.config.DISCORD_MAX_QUEUE_DEPTH,
+      pendingConversations: 0,
+      queuedMessages: 0,
+    };
     return reply.code(ready ? 200 : 503).send({
       ready,
       development: {
         discord: {
           ...discord,
+          participation: {
+            ...participation,
+            configuredMode: options.config.DISCORD_PARTICIPATION_MODE,
+          },
           installUrl:
             options.config.DISCORD_ENABLED && options.config.DISCORD_APPLICATION_ID
               ? getDiscordInstallUrl(

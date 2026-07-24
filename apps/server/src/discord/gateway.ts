@@ -2,7 +2,9 @@ import type {
   ConversationContext,
   ConversationMessage,
   ThreadlightOrchestrator,
+  ThreadlightTrigger,
 } from "@threadlight/core";
+import { assessImmediateSafety } from "@threadlight/core";
 import {
   type ChatInputCommandInteraction,
   Client,
@@ -11,6 +13,7 @@ import {
   type Interaction,
   type Message,
   type MessageContextMenuCommandInteraction,
+  PermissionFlagsBits,
   type TextBasedChannel,
 } from "discord.js";
 
@@ -18,13 +21,24 @@ import {
   ASK_THREADLIGHT_CONTEXT_NAME,
   PRAY_COMMAND_NAME,
   THREADLIGHT_COMMAND_NAME,
+  THREADLIGHT_MODE_COMMAND_NAME,
 } from "./commands.js";
+import {
+  type DiscordParticipationMode,
+  ParticipationController,
+  type ParticipationStatus,
+} from "./participation.js";
 import { formatThreadlightResponse } from "./response.js";
 
 const DEFAULT_COOLDOWN_MS = 15_000;
 const DEFAULT_RECENT_CONTEXT_LIMIT = 8;
+const DEFAULT_AMBIENT_QUIET_MS = 20_000;
+const DEFAULT_AMBIENT_COOLDOWN_MS = 180_000;
+const DEFAULT_MAX_QUEUE_DEPTH = 25;
+const MAX_EXPLICIT_COOLDOWNS = 1_000;
 const GENERIC_ERROR_MESSAGE = "Threadlight could not respond right now. Please try again.";
 const COOLDOWN_MESSAGE = "Please give Threadlight a moment before asking again.";
+const QUEUE_FULL_MESSAGE = "Threadlight is catching up. Please give it a moment.";
 
 export interface DiscordGatewayConfig {
   token: string;
@@ -32,6 +46,10 @@ export interface DiscordGatewayConfig {
   channelId?: string;
   cooldownMs?: number;
   recentContextLimit?: number;
+  participationMode?: DiscordParticipationMode;
+  ambientQuietMs?: number;
+  ambientCooldownMs?: number;
+  maxQueueDepth?: number;
 }
 
 export interface DiscordGatewayLogger {
@@ -41,6 +59,7 @@ export interface DiscordGatewayLogger {
 export interface DiscordGatewayStatus {
   readonly state: "stopped" | "starting" | "ready" | "error" | "stopping";
   readonly ready: boolean;
+  readonly participationStatus: ParticipationStatus;
 }
 
 type MessageHistoryChannel = Pick<TextBasedChannel, "messages">;
@@ -95,13 +114,16 @@ function createConversationContext(
   };
 }
 
-function isAllowedLocation(
+export function isAllowedDiscordLocation(
   config: DiscordGatewayConfig,
   guildId: string | null,
   channelId: string | null,
+  parentChannelId?: string | null,
 ): boolean {
   if (guildId !== config.guildId) return false;
-  return !config.channelId || channelId === config.channelId;
+  return (
+    !config.channelId || channelId === config.channelId || parentChannelId === config.channelId
+  );
 }
 
 function getChannel(interaction: Interaction): MessageHistoryChannel | undefined {
@@ -113,11 +135,20 @@ function getChannel(interaction: Interaction): MessageHistoryChannel | undefined
 export class DiscordGatewayClient implements DiscordGatewayStatus {
   public readonly client: Client;
   private readonly config: Required<
-    Pick<DiscordGatewayConfig, "cooldownMs" | "recentContextLimit">
+    Pick<
+      DiscordGatewayConfig,
+      | "cooldownMs"
+      | "recentContextLimit"
+      | "participationMode"
+      | "ambientQuietMs"
+      | "ambientCooldownMs"
+      | "maxQueueDepth"
+    >
   > &
     DiscordGatewayConfig;
   private readonly orchestrator: ThreadlightOrchestrator;
   private readonly logger: DiscordGatewayLogger;
+  private readonly participation: ParticipationController;
   private readonly cooldowns = new Map<string, number>();
   private currentState: DiscordGatewayStatus["state"] = "stopped";
 
@@ -130,9 +161,20 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
       ...config,
       cooldownMs: config.cooldownMs ?? DEFAULT_COOLDOWN_MS,
       recentContextLimit: config.recentContextLimit ?? DEFAULT_RECENT_CONTEXT_LIMIT,
+      participationMode: config.participationMode ?? "shy",
+      ambientQuietMs: config.ambientQuietMs ?? DEFAULT_AMBIENT_QUIET_MS,
+      ambientCooldownMs: config.ambientCooldownMs ?? DEFAULT_AMBIENT_COOLDOWN_MS,
+      maxQueueDepth: config.maxQueueDepth ?? DEFAULT_MAX_QUEUE_DEPTH,
     };
     this.orchestrator = orchestrator;
     this.logger = createLogger(logger);
+    this.participation = new ParticipationController({
+      mode: this.config.participationMode,
+      quietWindowMs: this.config.ambientQuietMs,
+      cooldownMs: this.config.ambientCooldownMs,
+      maxQueueDepth: this.config.maxQueueDepth,
+      onError: () => this.logger.error("Discord participation handling failed"),
+    });
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -156,6 +198,10 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
 
   public get ready(): boolean {
     return this.currentState === "ready" && this.client.isReady();
+  }
+
+  public get participationStatus(): ParticipationStatus {
+    return this.participation.status;
   }
 
   public isReady(): boolean {
@@ -202,6 +248,7 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
 
     this.currentState = "stopping";
     this.cooldowns.clear();
+    this.participation.stop();
     this.client.destroy();
     this.currentState = "stopped";
   }
@@ -216,47 +263,122 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
   }
 
   private startCooldown(userId: string): void {
+    if (this.cooldowns.size >= MAX_EXPLICIT_COOLDOWNS) {
+      const now = Date.now();
+      for (const [id, expiresAt] of this.cooldowns) {
+        if (expiresAt <= now) this.cooldowns.delete(id);
+      }
+      if (this.cooldowns.size >= MAX_EXPLICIT_COOLDOWNS) {
+        const oldest = this.cooldowns.keys().next().value;
+        if (oldest) this.cooldowns.delete(oldest);
+      }
+    }
     this.cooldowns.set(userId, Date.now() + this.config.cooldownMs);
   }
 
   private async handleMessage(message: Message): Promise<void> {
-    if (message.author.bot || !this.client.user) return;
+    if (message.author.bot || message.system || message.webhookId || !this.client.user) return;
     const guildId = message.guildId;
-    if (!guildId || !isAllowedLocation(this.config, guildId, message.channelId)) return;
+    const parentChannelId = message.channel.isThread() ? message.channel.parentId : null;
+    if (
+      !guildId ||
+      !isAllowedDiscordLocation(this.config, guildId, message.channelId, parentChannelId)
+    ) {
+      return;
+    }
 
     const prompt = extractMentionPrompt(message.content, this.client.user.id);
-    if (!prompt || this.isOnCooldown(message.author.id)) return;
+    if (prompt) {
+      if (this.isOnCooldown(message.author.id)) return;
+      this.startCooldown(message.author.id);
+      const disposition = this.participation.handleExplicit({
+        id: message.id,
+        conversationId: message.channelId,
+        execute: (trigger) => this.respondToMessage(message, prompt, trigger),
+      });
+      if (disposition === "queue-full") {
+        await message
+          .reply({ content: QUEUE_FULL_MESSAGE, allowedMentions: { parse: [] } })
+          .catch(() => undefined);
+      }
+      return;
+    }
 
-    this.startCooldown(message.author.id);
+    if (!message.content.trim()) return;
+    const disposition = this.participation.handle({
+      id: message.id,
+      conversationId: message.channelId,
+      urgent: assessImmediateSafety(message.content).riskLevel === "urgent",
+      execute: (trigger) => this.respondToMessage(message, message.content, trigger),
+    });
+    if (disposition === "queue-full" && this.participation.status.mode === "high") {
+      await message
+        .reply({ content: QUEUE_FULL_MESSAGE, allowedMentions: { parse: [] } })
+        .catch(() => undefined);
+    }
+  }
+
+  private async respondToMessage(
+    message: Message,
+    prompt: string,
+    trigger: ThreadlightTrigger,
+  ): Promise<boolean> {
     try {
+      const guildId = message.guildId;
+      if (!guildId) return false;
       const contextMessages = await fetchRecentContext(
         message.channel as MessageHistoryChannel,
         this.config.recentContextLimit,
       );
-      const context = createConversationContext(message.channelId, guildId, contextMessages);
+      const context = createConversationContext(
+        message.channelId,
+        guildId,
+        contextMessages.filter((item) => item.id !== message.id),
+      );
       const result = await this.orchestrator.respond({
         context,
         prompt,
         source: "discord",
+        trigger,
       });
-      if (!result.reply) return;
+      if (!result.reply) return false;
 
       await message.reply({
         embeds: formatThreadlightResponse(result),
         allowedMentions: { parse: [] },
       });
+      return true;
     } catch {
       this.logger.error("Discord message handling failed");
-      await message
+      return message
         .reply({ content: GENERIC_ERROR_MESSAGE, allowedMentions: { parse: [] } })
-        .catch(() => undefined);
+        .then(() => true)
+        .catch(() => false);
     }
   }
 
   private async handleInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inGuild()) return;
-    if (!isAllowedLocation(this.config, interaction.guildId, interaction.channelId)) return;
+    const parentChannelId = interaction.channel?.isThread() ? interaction.channel.parentId : null;
+    if (
+      !isAllowedDiscordLocation(
+        this.config,
+        interaction.guildId,
+        interaction.channelId,
+        parentChannelId,
+      )
+    ) {
+      return;
+    }
     if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;
+
+    if (
+      interaction.isChatInputCommand() &&
+      interaction.commandName === THREADLIGHT_MODE_COMMAND_NAME
+    ) {
+      await this.handleModeCommand(interaction);
+      return;
+    }
 
     const userId = interaction.user.id;
     if (this.isOnCooldown(userId)) {
@@ -277,7 +399,28 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
       return;
     }
 
+    const disposition = this.participation.handleExplicit({
+      id: interaction.id,
+      conversationId: interaction.channelId,
+      execute: () => this.respondToInteraction(interaction, request),
+    });
+    if (disposition === "queue-full") {
+      await interaction
+        .editReply({ content: QUEUE_FULL_MESSAGE, allowedMentions: { parse: [] } })
+        .catch(() => undefined);
+    }
+  }
+
+  private async respondToInteraction(
+    interaction: ChatInputCommandInteraction | MessageContextMenuCommandInteraction,
+    request: {
+      prompt: string;
+      intent?: "reflection" | "prayer";
+      targetMessageId?: string;
+    },
+  ): Promise<boolean> {
     try {
+      if (!interaction.guildId) return false;
       const channel = getChannel(interaction);
       if (!channel) throw new Error("Discord interaction channel is unavailable");
 
@@ -285,34 +428,83 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
       const context = createConversationContext(
         interaction.channelId,
         interaction.guildId,
-        contextMessages,
+        request.targetMessageId
+          ? contextMessages.filter((item) => item.id !== request.targetMessageId)
+          : contextMessages,
       );
       const result = await this.orchestrator.respond({
         context,
         prompt: request.prompt,
         source: "discord",
+        trigger: "explicit",
         ...(request.intent ? { intent: request.intent } : {}),
       });
       if (!result.reply) {
         await interaction.deleteReply();
-        return;
+        return false;
       }
 
       await interaction.editReply({
         embeds: formatThreadlightResponse(result),
         allowedMentions: { parse: [] },
       });
+      return true;
     } catch {
       this.logger.error("Discord interaction handling failed");
-      await interaction
+      return interaction
         .editReply({ content: GENERIC_ERROR_MESSAGE, allowedMentions: { parse: [] } })
-        .catch(() => undefined);
+        .then(() => true)
+        .catch(() => false);
     }
+  }
+
+  private async handleModeCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+      await interaction.reply({
+        content: "Manage Server permission is required to change Threadlight's participation mode.",
+        ephemeral: true,
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+
+    const requested = interaction.options.getString("mode") as DiscordParticipationMode | null;
+    if (!requested) {
+      await interaction.reply({
+        content: `Threadlight is currently in **${this.participation.status.mode}** mode.`,
+        ephemeral: true,
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+
+    if (requested === "high" && !interaction.options.getBoolean("confirm_high")) {
+      await interaction.reply({
+        content:
+          "High mode replies to every eligible human message. Run the command again with `confirm_high: True`.",
+        ephemeral: true,
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+
+    this.participation.setMode(requested);
+    await interaction.reply({
+      content: `Threadlight is now in **${requested}** mode until the service restarts.`,
+      ephemeral: true,
+      allowedMentions: { parse: [] },
+    });
   }
 
   private getInteractionRequest(
     interaction: ChatInputCommandInteraction | MessageContextMenuCommandInteraction,
-  ): { prompt: string; intent?: "reflection" | "prayer" } | undefined {
+  ):
+    | {
+        prompt: string;
+        intent?: "reflection" | "prayer";
+        targetMessageId?: string;
+      }
+    | undefined {
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === THREADLIGHT_COMMAND_NAME) {
         return { prompt: interaction.options.getString("prompt", true), intent: "reflection" };
@@ -328,7 +520,7 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
     if (target.author.bot) return undefined;
 
     const prompt = target.content.trim();
-    return prompt ? { prompt, intent: "reflection" } : undefined;
+    return prompt ? { prompt, intent: "reflection", targetMessageId: target.id } : undefined;
   }
 }
 

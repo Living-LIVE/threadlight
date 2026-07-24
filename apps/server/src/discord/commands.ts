@@ -1,9 +1,15 @@
-import { ApplicationCommandType, ContextMenuCommandBuilder, SlashCommandBuilder } from "discord.js";
+import {
+  ApplicationCommandType,
+  ContextMenuCommandBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from "discord.js";
 
 export const THREADLIGHT_COMMAND_NAME = "threadlight";
 export const PRAY_COMMAND_NAME = "pray";
+export const THREADLIGHT_MODE_COMMAND_NAME = "threadlight-mode";
 export const ASK_THREADLIGHT_CONTEXT_NAME = "Ask Threadlight";
-export const THREADLIGHT_DISCORD_PERMISSIONS = 84_992;
+export const THREADLIGHT_DISCORD_PERMISSIONS = 274_877_991_936;
 
 export const threadlightCommand = new SlashCommandBuilder()
   .setName(THREADLIGHT_COMMAND_NAME)
@@ -22,13 +28,34 @@ export const prayCommand = new SlashCommandBuilder()
     option.setName("request").setDescription("What would you like prayer for?").setRequired(true),
   );
 
+export const threadlightModeCommand = new SlashCommandBuilder()
+  .setName(THREADLIGHT_MODE_COMMAND_NAME)
+  .setDescription("View or temporarily change how often Threadlight participates.")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addStringOption((option) =>
+    option
+      .setName("mode")
+      .setDescription("The participation mode to use until the service restarts.")
+      .addChoices(
+        { name: "Shy - only when asked", value: "shy" },
+        { name: "Medium - when relevant", value: "medium" },
+        { name: "High - every message", value: "high" },
+      ),
+  )
+  .addBooleanOption((option) =>
+    option.setName("confirm_high").setDescription("Required to enable High mode in this channel."),
+  );
+
 export const askThreadlightContextCommand = new ContextMenuCommandBuilder()
   .setName(ASK_THREADLIGHT_CONTEXT_NAME)
   .setType(ApplicationCommandType.Message);
 
-export const discordCommands = [threadlightCommand, prayCommand, askThreadlightContextCommand].map(
-  (command) => command.toJSON(),
-);
+export const discordCommands = [
+  threadlightCommand,
+  prayCommand,
+  threadlightModeCommand,
+  askThreadlightContextCommand,
+].map((command) => command.toJSON());
 
 export function getDiscordCommands() {
   return discordCommands.map((command) => ({ ...command }));

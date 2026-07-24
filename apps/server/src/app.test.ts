@@ -39,6 +39,10 @@ describe("Threadlight API", () => {
           enabled: false,
           ready: true,
           state: "disabled",
+          participation: {
+            mode: "shy",
+            configuredMode: "shy",
+          },
         },
         ai: "fixture",
         scripture: "fixture",
@@ -60,6 +64,7 @@ describe("Threadlight API", () => {
       DISCORD_BOT_TOKEN: "test-token",
       DISCORD_GUILD_ID: "guild-456",
       DISCORD_CHANNEL_ID: "channel-789",
+      DISCORD_PARTICIPATION_MODE: "medium",
     });
     const orchestrator = new DefaultThreadlightOrchestrator({
       aiProvider: new FixtureAIProvider(),
@@ -74,6 +79,14 @@ describe("Threadlight API", () => {
           enabled: true,
           ready: false,
           state: "starting",
+          participation: {
+            mode: "medium",
+            quietWindowMs: 20_000,
+            cooldownMs: 180_000,
+            maxQueueDepth: 25,
+            pendingConversations: 0,
+            queuedMessages: 0,
+          },
           channelConfigured: true,
           installUrl: expect.stringContaining("guild_id=guild-456"),
         },
@@ -91,6 +104,10 @@ describe("Threadlight API", () => {
           enabled: true,
           ready: false,
           state: "starting",
+          participation: {
+            mode: "medium",
+            configuredMode: "medium",
+          },
         },
       },
     });

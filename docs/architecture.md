@@ -6,6 +6,7 @@ Threadlight uses one provider-neutral orchestration path for Discord and the pub
 
 ```text
 Channel event
+  -> participation policy and per-conversation queue
   -> normalized conversation context
   -> deterministic safety precheck
   -> AI discernment
@@ -29,8 +30,9 @@ types never cross into the core contract.
 
 ### Server
 
-`apps/server` owns runtime configuration, the Discord gateway, the public API, rate limiting,
-static delivery, and process lifecycle.
+`apps/server` owns runtime configuration, the Discord gateway, participation timing,
+per-conversation queues, bounded event deduplication, the public API, rate limiting, static
+delivery, and process lifecycle.
 
 ### Deployment
 
@@ -44,14 +46,16 @@ closes the HTTP server before exiting.
 Threadlight is intentionally stateless:
 
 - It does not persist Discord messages or demo conversations.
-- It fetches only recent channel context after an explicit invocation.
+- It fetches only recent context from the configured channel or one of its child threads.
+- Participation timers, mode overrides, queues, and deduplication state reset on restart.
 - It needs no database or queue for the Discord-first release.
 - Container replacement or laptop restart does not require data migration.
 
 The liveness endpoint reports whether the process can serve requests. The readiness endpoint
 separately reports whether an enabled Discord gateway can access the configured guild and
-channel, exposes a sanitized install URL when authorization is incomplete, and reports whether
-competition provider credentials are configured.
+channel, exposes the effective participation mode and queue state, provides a sanitized install
+URL when authorization is incomplete, and reports whether competition provider credentials are
+configured.
 
 ### Web
 
@@ -74,7 +78,9 @@ translation, attribution, and source metadata.
 
 - Raw message content is not written to application logs.
 - Demo sessions are processed in memory and are not persisted.
-- Discord context is fetched only for an explicit command or mention.
+- Shy mode processes Discord context only after an explicit invocation.
+- Medium and High process recent context without an explicit mention. Operators must disclose
+  this behavior to participants in the configured channel.
 - Provider keys remain server-side.
 
 ## Operator Boundary

@@ -60,18 +60,21 @@ export type ThreadlightResult = {
 
 export type ThreadlightSource = "discord" | "demo";
 export type ThreadlightIntent = "reflection" | "prayer";
+export type ThreadlightTrigger = "explicit" | "ambient" | "every-message";
 
 export type ThreadlightRequest = {
   context: ConversationContext;
   prompt: string;
   source: ThreadlightSource;
   intent?: ThreadlightIntent;
+  trigger?: ThreadlightTrigger;
 };
 
 export type ComposeReplyInput = {
   context: ConversationContext;
   prompt: string;
   intent?: ThreadlightIntent;
+  trigger: ThreadlightTrigger;
   decision: DiscernmentDecision;
   passage?: ScripturePassage;
 };
@@ -82,6 +85,7 @@ export interface AIProvider {
     context: ConversationContext;
     prompt: string;
     intent?: ThreadlightIntent;
+    trigger: ThreadlightTrigger;
   }): Promise<DiscernmentDecision>;
   compose(input: ComposeReplyInput): Promise<ComposedReply>;
 }

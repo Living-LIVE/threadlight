@@ -83,6 +83,15 @@ type RuntimeReadiness = {
       state: string;
       installUrl: string | null;
       channelConfigured: boolean;
+      participation: {
+        mode: "shy" | "medium" | "high";
+        configuredMode: "shy" | "medium" | "high";
+        quietWindowMs: number;
+        cooldownMs: number;
+        maxQueueDepth: number;
+        pendingConversations: number;
+        queuedMessages: number;
+      };
     };
     ai: string;
     scripture: string;
@@ -941,6 +950,25 @@ function RuntimeStatusDialog({
             value={discord?.channelConfigured ? "Configured" : "Not configured"}
             tone={discord?.channelConfigured ? "live" : "muted"}
           />
+          <StatusRow
+            label="Participation"
+            value={formatParticipationMode(discord?.participation.mode)}
+            tone={discord?.participation.mode === "high" ? "warn" : "live"}
+          />
+          {discord?.participation.mode === "medium" && (
+            <StatusRow
+              label="Ambient cadence"
+              value={`${discord.participation.quietWindowMs / 1_000}s quiet · ${discord.participation.cooldownMs / 60_000}m cooldown`}
+              tone="muted"
+            />
+          )}
+          {Boolean(discord?.participation.queuedMessages) && (
+            <StatusRow
+              label="Queued messages"
+              value={String(discord?.participation.queuedMessages)}
+              tone="muted"
+            />
+          )}
           {discord?.enabled && !discord.ready && discord.installUrl && (
             <a className="settings-link" href={discord.installUrl} target="_blank" rel="noreferrer">
               Authorize Discord <ExternalLink size={14} />
@@ -972,6 +1000,11 @@ function RuntimeStatusDialog({
       </section>
     </div>
   );
+}
+
+function formatParticipationMode(mode?: "shy" | "medium" | "high") {
+  if (!mode) return "Unavailable";
+  return `${mode.charAt(0).toUpperCase()}${mode.slice(1)}`;
 }
 
 function StatusRow({

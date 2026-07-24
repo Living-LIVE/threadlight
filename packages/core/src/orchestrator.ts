@@ -36,6 +36,7 @@ export class DefaultThreadlightOrchestrator implements ThreadlightOrchestrator {
   async respond(request: ThreadlightRequest): Promise<ThreadlightResult> {
     const startedAt = this.#now();
     const steps: TraceStep[] = [];
+    const trigger = request.trigger ?? "explicit";
     const combinedText = [
       ...request.context.messages.slice(-20).map((message) => message.content),
       request.prompt,
@@ -76,8 +77,19 @@ export class DefaultThreadlightOrchestrator implements ThreadlightOrchestrator {
       context: request.context,
       prompt: request.prompt,
       intent: request.intent,
+      trigger,
     });
     decision = applySafetyOverride(decision, assessment);
+    if (decision.action === "silent" && trigger !== "ambient") {
+      decision = {
+        ...decision,
+        action: "respond",
+        reason:
+          trigger === "every-message"
+            ? "Always-participate mode requires a brief response."
+            : "Threadlight was directly invited to respond.",
+      };
+    }
     steps.push(step("discernment", discernmentStarted, this.#now(), "completed"));
 
     if (decision.action === "silent") {
@@ -107,6 +119,7 @@ export class DefaultThreadlightOrchestrator implements ThreadlightOrchestrator {
       context: request.context,
       prompt: request.prompt,
       intent: request.intent,
+      trigger,
       decision,
       passage,
     });

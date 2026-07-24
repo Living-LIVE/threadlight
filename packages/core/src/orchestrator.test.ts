@@ -82,7 +82,7 @@ describe("DefaultThreadlightOrchestrator", () => {
 
   it("respects a decision to remain silent", async () => {
     const orchestrator = new DefaultThreadlightOrchestrator(providers("silent"));
-    const result = await orchestrator.respond(baseRequest);
+    const result = await orchestrator.respond({ ...baseRequest, trigger: "ambient" });
 
     expect(result.reply).toBeUndefined();
     expect(result.trace.steps).toContainEqual({
@@ -90,6 +90,16 @@ describe("DefaultThreadlightOrchestrator", () => {
       durationMs: 0,
       status: "skipped",
     });
+  });
+
+  it("forces a response when every-message mode receives a silent decision", async () => {
+    const orchestrator = new DefaultThreadlightOrchestrator(providers("silent"));
+    const result = await orchestrator.respond({ ...baseRequest, trigger: "every-message" });
+
+    expect(result.decision.action).toBe("respond");
+    expect(result.decision.reason).toBe("Always-participate mode requires a brief response.");
+    expect(result.reply?.message).toContain("weight");
+    expect(result.reply?.passage).toBeUndefined();
   });
 
   it("forces human escalation for immediate-harm language", async () => {

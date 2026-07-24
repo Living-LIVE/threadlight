@@ -13,6 +13,10 @@ if (config.DISCORD_ENABLED) {
       token: required(config.DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN"),
       guildId: required(config.DISCORD_GUILD_ID, "DISCORD_GUILD_ID"),
       channelId: config.DISCORD_CHANNEL_ID,
+      participationMode: config.DISCORD_PARTICIPATION_MODE,
+      ambientQuietMs: config.DISCORD_AMBIENT_QUIET_SECONDS * 1_000,
+      ambientCooldownMs: config.DISCORD_AMBIENT_COOLDOWN_SECONDS * 1_000,
+      maxQueueDepth: config.DISCORD_MAX_QUEUE_DEPTH,
     },
     orchestrator,
   );
@@ -27,11 +31,20 @@ const app = await buildApp({
           enabled: true,
           ready: gateway.ready,
           state: gateway.state,
+          participation: gateway.participationStatus,
         }
       : {
           enabled: false,
           ready: true,
           state: "disabled",
+          participation: {
+            mode: config.DISCORD_PARTICIPATION_MODE,
+            quietWindowMs: config.DISCORD_AMBIENT_QUIET_SECONDS * 1_000,
+            cooldownMs: config.DISCORD_AMBIENT_COOLDOWN_SECONDS * 1_000,
+            maxQueueDepth: config.DISCORD_MAX_QUEUE_DEPTH,
+            pendingConversations: 0,
+            queuedMessages: 0,
+          },
         },
   }),
 });
