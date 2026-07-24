@@ -1,26 +1,33 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   ArrowUp,
   BookOpen,
   Check,
   ChevronDown,
   CircleAlert,
   Clock3,
+  ExternalLink,
   HeartHandshake,
   Info,
   LoaderCircle,
   MessageCircle,
-  Mic,
-  MoreHorizontal,
   RefreshCw,
   Send,
   Settings2,
   Sparkles,
   Users,
   WifiOff,
+  X,
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Author = {
   id: string;
@@ -67,6 +74,25 @@ type ResponseData = {
   };
 };
 
+type RuntimeReadiness = {
+  ready: boolean;
+  development: {
+    discord: {
+      enabled: boolean;
+      ready: boolean;
+      state: string;
+      installUrl: string | null;
+      channelConfigured: boolean;
+    };
+    ai: string;
+    scripture: string;
+  };
+  competition: {
+    gloo: boolean;
+    youVersion: boolean;
+  };
+};
+
 type Scenario = {
   id: string;
   label: string;
@@ -107,9 +133,9 @@ const baseTrace = (id: string, totalMs: number): ResponseData["trace"] => ({
   scriptureProvider: "AO Lab BSB demo fallback",
   totalMs,
   steps: [
-    { name: "Read the room", durationMs: 218, status: "complete" },
-    { name: "Discern a response", durationMs: 531, status: "complete" },
-    { name: "Ground in Scripture", durationMs: 764, status: "complete" },
+    { name: "Read the room", durationMs: 218, status: "completed" },
+    { name: "Discern a response", durationMs: 531, status: "completed" },
+    { name: "Ground in Scripture", durationMs: 764, status: "completed" },
   ],
 });
 
@@ -320,43 +346,61 @@ function normalizeScenario(value: unknown, index: number): Scenario | null {
   return { ...fallback, id, label, description };
 }
 
-async function loadScenarios(): Promise<{ scenarios: Scenario[]; usedFallback: boolean }> {
-  try {
-    const response = await fetch("/api/demo/scenarios");
-    if (!response.ok) throw new Error(`Scenario request failed with ${response.status}`);
-    const body = (await response.json()) as { scenarios?: unknown };
-    const scenarios = Array.isArray(body.scenarios)
-      ? body.scenarios
-          .map(normalizeScenario)
-          .filter((scenario): scenario is Scenario => scenario !== null)
-      : [];
-    if (scenarios.length === 0) throw new Error("No scenarios returned");
-    return { scenarios, usedFallback: false };
-  } catch {
-    return { scenarios: bundledScenarios, usedFallback: true };
-  }
+async function loadScenarios(): Promise<Scenario[]> {
+  const response = await fetch("/api/demo/scenarios");
+  if (!response.ok) throw new Error(`Scenario request failed with ${response.status}`);
+  const body = (await response.json()) as { scenarios?: unknown };
+  const scenarios = Array.isArray(body.scenarios)
+    ? body.scenarios
+        .map(normalizeScenario)
+        .filter((scenario): scenario is Scenario => scenario !== null)
+    : [];
+  if (scenarios.length === 0) throw new Error("No scenarios returned");
+  return scenarios;
 }
 
 async function requestResponse(
   scenario: Scenario,
   messages: ChatMessage[],
   prompt: string,
-): Promise<{ data: ResponseData; usedFallback: boolean }> {
-  try {
-    const response = await fetch("/api/demo/respond", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scenarioId: scenario.id, messages, prompt }),
-    });
-    if (!response.ok) throw new Error(`Response request failed with ${response.status}`);
-    const data = (await response.json()) as ResponseData;
-    if (!data.reply?.message || !data.decision || !data.trace)
-      throw new Error("Response contract was incomplete");
-    return { data, usedFallback: false };
-  } catch {
-    await new Promise((resolve) => window.setTimeout(resolve, 420));
-    return { data: scenario.fixture, usedFallback: true };
+): Promise<ResponseData> {
+  const response = await fetch("/api/demo/respond", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenarioId: scenario.id, messages, prompt }),
+  });
+  if (!response.ok) throw new Error(`Response request failed with ${response.status}`);
+  const data = (await response.json()) as ResponseData;
+  if (!data.reply?.message || !data.decision || !data.trace) {
+    throw new Error("Response contract was incomplete");
   }
+  return data;
+}
+
+async function loadRuntimeReadiness(): Promise<RuntimeReadiness> {
+  const response = await fetch("/api/readiness");
+  if (response.status !== 200 && response.status !== 503) {
+    throw new Error(`Readiness request failed with ${response.status}`);
+  }
+  return (await response.json()) as RuntimeReadiness;
+}
+
+function runtimeConnection(
+  runtime: RuntimeReadiness | null,
+  runtimeError: boolean,
+  isChecking: boolean,
+  isOffline: boolean,
+): { label: string; tone: "live" | "muted" | "warn" } {
+  if (isOffline) return { label: "Offline", tone: "warn" };
+  if (isChecking) return { label: "Checking", tone: "muted" };
+  if (runtimeError || !runtime) return { label: "Demo only", tone: "warn" };
+  if (!runtime.development.discord.enabled) {
+    return { label: "Local preview", tone: "muted" };
+  }
+  if (runtime.development.discord.ready) {
+    return { label: "Discord ready", tone: "live" };
+  }
+  return { label: "Discord setup", tone: "warn" };
 }
 
 function initials(name: string) {
@@ -394,14 +438,17 @@ function IconButton({
   children,
   onClick,
   disabled = false,
+  buttonRef,
 }: {
   label: string;
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  buttonRef?: { current: HTMLButtonElement | null };
 }) {
   return (
     <button
+      ref={buttonRef}
       className="icon-button"
       type="button"
       aria-label={label}
@@ -424,11 +471,19 @@ export function App() {
   const [isLoadingScenarios, setIsLoadingScenarios] = useState(true);
   const [scenarioError, setScenarioError] = useState(false);
   const [responseError, setResponseError] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(true);
+  const [responseSource, setResponseSource] = useState<"fixture" | "live">("fixture");
+  const [runtime, setRuntime] = useState<RuntimeReadiness | null>(null);
+  const [runtimeError, setRuntimeError] = useState(false);
+  const [isCheckingRuntime, setIsCheckingRuntime] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [isOffline, setIsOffline] = useState(
     () => typeof navigator !== "undefined" && !navigator.onLine,
   );
   const [showProvenance, setShowProvenance] = useState(false);
+  const responseRegionRef = useRef<HTMLElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsCloseRef = useRef<HTMLButtonElement>(null);
+  const settingsDialogRef = useRef<HTMLElement>(null);
 
   const selectedScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === scenarioId) ?? defaultScenario,
@@ -440,13 +495,13 @@ export function App() {
     loadScenarios()
       .then((result) => {
         if (!active) return;
-        setScenarios(result.scenarios);
-        setUsingFallback(result.usedFallback);
+        setScenarios(result);
         setScenarioError(false);
         setIsLoadingScenarios(false);
       })
       .catch(() => {
         if (!active) return;
+        setScenarios(bundledScenarios);
         setScenarioError(true);
         setIsLoadingScenarios(false);
       });
@@ -454,6 +509,23 @@ export function App() {
       active = false;
     };
   }, []);
+
+  const refreshRuntime = useCallback(async () => {
+    setIsCheckingRuntime(true);
+    try {
+      setRuntime(await loadRuntimeReadiness());
+      setRuntimeError(false);
+    } catch {
+      setRuntime(null);
+      setRuntimeError(true);
+    } finally {
+      setIsCheckingRuntime(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRuntime();
+  }, [refreshRuntime]);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -466,6 +538,39 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!showSettings) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowSettings(false);
+        return;
+      }
+      if (event.key !== "Tab" || !settingsDialogRef.current) return;
+      const focusable = Array.from(
+        settingsDialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]"),
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    settingsCloseRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      settingsButtonRef.current?.focus();
+    };
+  }, [showSettings]);
+
   const selectScenario = (nextId: string) => {
     const nextScenario =
       scenarios.find((scenario) => scenario.id === nextId) ??
@@ -474,6 +579,7 @@ export function App() {
     setScenarioId(nextScenario.id);
     setMessages(nextScenario.messages);
     setResponse(nextScenario.fixture);
+    setResponseSource("fixture");
     setPrompt("");
     setResponseError(false);
     setShowProvenance(false);
@@ -496,15 +602,24 @@ export function App() {
     setResponseError(false);
     setShowProvenance(false);
     try {
-      const result = await requestResponse(selectedScenario, nextMessages, nextPrompt);
-      setResponse(result.data);
-      setUsingFallback(result.usedFallback);
+      setResponse(await requestResponse(selectedScenario, nextMessages, nextPrompt));
+      setResponseSource("live");
+      window.setTimeout(() => {
+        responseRegionRef.current?.focus({ preventScroll: true });
+        if (window.matchMedia("(max-width: 780px)").matches) {
+          responseRegionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 0);
     } catch {
+      setResponse(null);
       setResponseError(true);
+      window.setTimeout(() => responseRegionRef.current?.focus(), 0);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const connection = runtimeConnection(runtime, runtimeError, isCheckingRuntime, isOffline);
 
   return (
     <div className="app-shell">
@@ -519,14 +634,15 @@ export function App() {
         </div>
         <div className="topbar-actions">
           <div className="connection-status" role="status">
-            {isOffline ? <WifiOff size={14} /> : <StatusDot />}
-            <span>{isOffline ? "Offline" : usingFallback ? "Demo mode" : "Connected"}</span>
+            {isOffline ? <WifiOff size={14} /> : <StatusDot tone={connection.tone} />}
+            <span>{connection.label}</span>
           </div>
-          <IconButton label="Room settings">
+          <IconButton
+            label="Runtime status"
+            buttonRef={settingsButtonRef}
+            onClick={() => setShowSettings(true)}
+          >
             <Settings2 size={17} />
-          </IconButton>
-          <IconButton label="More room actions">
-            <MoreHorizontal size={18} />
           </IconButton>
         </div>
       </header>
@@ -560,10 +676,7 @@ export function App() {
             </div>
             <div className="stage-tint" />
             <div className="stage-topline">
-              <span className="live-tag">
-                <StatusDot /> LIVE
-              </span>
-              <span>18:42:16</span>
+              <span className="live-tag">DEMO ROOM</span>
             </div>
             <div className="stage-caption">
               <div>
@@ -574,19 +687,6 @@ export function App() {
                 <Users size={15} />
                 <span>12 present</span>
               </div>
-            </div>
-            <div className="stage-controls">
-              <div className="stage-control-group">
-                <IconButton label="Toggle microphone">
-                  <Mic size={16} />
-                </IconButton>
-                <IconButton label="Open room chat">
-                  <MessageCircle size={16} />
-                </IconButton>
-              </div>
-              <span className="stage-audio">
-                <Activity size={14} /> room audio on
-              </span>
             </div>
           </div>
           <div className="stage-meta">
@@ -627,7 +727,7 @@ export function App() {
                 <span className="selector-count">{scenarios.length} available</span>
               )}
             </div>
-            <div className="scenario-list" role="tablist" aria-label="Scenarios">
+            <div className="scenario-list">
               {scenarios.map((scenario) => {
                 const Icon = scenario.icon;
                 return (
@@ -635,8 +735,7 @@ export function App() {
                     key={scenario.id}
                     className={`scenario-tab ${scenario.id === scenarioId ? "selected" : ""}`}
                     type="button"
-                    role="tab"
-                    aria-selected={scenario.id === scenarioId}
+                    aria-pressed={scenario.id === scenarioId}
                     onClick={() => selectScenario(scenario.id)}
                   >
                     <Icon size={15} />
@@ -647,7 +746,7 @@ export function App() {
             </div>
             {scenarioError && (
               <p className="inline-error">
-                <CircleAlert size={14} /> Could not load room moments.
+                <CircleAlert size={14} /> Bundled room moments shown; live catalog unavailable.
               </p>
             )}
           </fieldset>
@@ -694,7 +793,12 @@ export function App() {
           </form>
         </section>
 
-        <aside className="threadlight-column" aria-label="Threadlight response">
+        <aside
+          ref={responseRegionRef}
+          className="threadlight-column"
+          aria-label="Threadlight response"
+          tabIndex={-1}
+        >
           <div className="agent-heading">
             <div className="agent-heading-icon">
               <Sparkles size={17} />
@@ -704,7 +808,8 @@ export function App() {
               <h2>Room response</h2>
             </div>
             <span className="agent-live">
-              <StatusDot /> listening
+              <StatusDot tone={isLoading ? "warn" : "muted"} />
+              {isLoading ? "responding" : "ready on request"}
             </span>
           </div>
           {isLoading ? (
@@ -719,6 +824,7 @@ export function App() {
           ) : response ? (
             <ResponsePanel
               response={response}
+              responseSource={responseSource}
               showProvenance={showProvenance}
               onToggleProvenance={() => setShowProvenance((value) => !value)}
             />
@@ -733,6 +839,157 @@ export function App() {
           </div>
         </aside>
       </main>
+      {showSettings && (
+        <RuntimeStatusDialog
+          runtime={runtime}
+          runtimeError={runtimeError}
+          isChecking={isCheckingRuntime}
+          closeRef={settingsCloseRef}
+          dialogRef={settingsDialogRef}
+          onClose={() => setShowSettings(false)}
+          onRefresh={() => void refreshRuntime()}
+        />
+      )}
+    </div>
+  );
+}
+
+function RuntimeStatusDialog({
+  runtime,
+  runtimeError,
+  isChecking,
+  closeRef,
+  dialogRef,
+  onClose,
+  onRefresh,
+}: {
+  runtime: RuntimeReadiness | null;
+  runtimeError: boolean;
+  isChecking: boolean;
+  closeRef: { current: HTMLButtonElement | null };
+  dialogRef: { current: HTMLElement | null };
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const discord = runtime?.development.discord;
+  const serviceStatus = isChecking
+    ? { label: "Checking", tone: "muted" as const }
+    : runtimeError
+      ? { label: "Unavailable", tone: "warn" as const }
+      : { label: "Online", tone: "live" as const };
+  const discordStatus = !discord?.enabled
+    ? { label: "Disabled", tone: "muted" as const }
+    : discord.ready
+      ? { label: "Connected", tone: "live" as const }
+      : discord.state === "starting"
+        ? { label: "Connecting", tone: "muted" as const }
+        : discord.state === "error"
+          ? { label: "Setup required", tone: "warn" as const }
+          : { label: "Not connected", tone: "warn" as const };
+
+  return (
+    <div className="settings-backdrop">
+      <section
+        ref={dialogRef}
+        className="settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="runtime-status-title"
+      >
+        <header className="settings-heading">
+          <div>
+            <p className="eyebrow">STANDALONE SERVICE</p>
+            <h2 id="runtime-status-title">Runtime status</h2>
+          </div>
+          <div className="settings-actions">
+            <IconButton label="Refresh runtime status" onClick={onRefresh} disabled={isChecking}>
+              <RefreshCw className={isChecking ? "spin" : ""} size={17} />
+            </IconButton>
+            <button
+              ref={closeRef}
+              className="icon-button"
+              type="button"
+              aria-label="Close runtime status"
+              title="Close runtime status"
+              onClick={onClose}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </header>
+
+        <div className="settings-section">
+          <span className="settings-section-label">Service</span>
+          <StatusRow label="Web and API" value={serviceStatus.label} tone={serviceStatus.tone} />
+          <StatusRow
+            label="AI provider"
+            value={runtime?.development.ai ?? "Unavailable"}
+            tone={runtime ? "live" : "muted"}
+          />
+          <StatusRow
+            label="Scripture provider"
+            value={runtime?.development.scripture ?? "Unavailable"}
+            tone={runtime ? "live" : "muted"}
+          />
+        </div>
+
+        <div className="settings-section">
+          <span className="settings-section-label">Discord</span>
+          <StatusRow label="Gateway" value={discordStatus.label} tone={discordStatus.tone} />
+          <StatusRow
+            label="Channel"
+            value={discord?.channelConfigured ? "Configured" : "Not configured"}
+            tone={discord?.channelConfigured ? "live" : "muted"}
+          />
+          {discord?.enabled && !discord.ready && discord.installUrl && (
+            <a className="settings-link" href={discord.installUrl} target="_blank" rel="noreferrer">
+              Authorize Discord <ExternalLink size={14} />
+            </a>
+          )}
+        </div>
+
+        <div className="settings-section">
+          <span className="settings-section-label">Submission providers</span>
+          <StatusRow
+            label="Gloo"
+            value={runtime?.competition.gloo ? "Ready" : "Pending credentials"}
+            tone={runtime?.competition.gloo ? "live" : "muted"}
+          />
+          <StatusRow
+            label="YouVersion"
+            value={runtime?.competition.youVersion ? "Ready" : "Pending credentials"}
+            tone={runtime?.competition.youVersion ? "live" : "muted"}
+          />
+        </div>
+
+        <footer className="settings-footer">
+          <Info size={14} />
+          <span>Credentials remain in the server environment and are never shown here.</span>
+          <a href="/api/readiness" target="_blank" rel="noreferrer">
+            JSON <ExternalLink size={12} />
+          </a>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function StatusRow({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "live" | "muted" | "warn";
+}) {
+  return (
+    <div className="settings-row">
+      <span>{label}</span>
+      <strong>
+        <StatusDot tone={tone} />
+        {value}
+      </strong>
     </div>
   );
 }
@@ -790,10 +1047,12 @@ function EmptyState({ onStart }: { onStart: () => void }) {
 
 function ResponsePanel({
   response,
+  responseSource,
   showProvenance,
   onToggleProvenance,
 }: {
   response: ResponseData;
+  responseSource: "fixture" | "live";
   showProvenance: boolean;
   onToggleProvenance: () => void;
 }) {
@@ -804,7 +1063,9 @@ function ResponsePanel({
         <Avatar author={AGENT} />
         <div>
           <strong>Here is what I notice.</strong>
-          <span>Based on this room right now</span>
+          <span>
+            {responseSource === "live" ? "Live provider response" : "Bundled demo response"}
+          </span>
         </div>
       </div>
       <p className="response-message">{response.reply.message}</p>
@@ -891,10 +1152,18 @@ function Provenance({ trace }: { trace: ResponseData["trace"] }) {
         {trace.steps.map((step) => (
           <div key={step.name} className="trace-step">
             <span>
-              <StatusDot tone={step.status === "complete" ? "live" : "warn"} />
+              <StatusDot
+                tone={
+                  step.status === "completed"
+                    ? "live"
+                    : step.status === "skipped"
+                      ? "muted"
+                      : "warn"
+                }
+              />
               {step.name}
             </span>
-            <strong>{step.durationMs}ms</strong>
+            <strong>{step.status === "skipped" ? "Skipped" : `${step.durationMs}ms`}</strong>
           </div>
         ))}
       </div>
@@ -924,8 +1193,8 @@ function ResponseError({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="response-error" role="alert">
       <CircleAlert size={21} />
-      <strong>The response is taking a pause.</strong>
-      <p>Try again when the room is ready.</p>
+      <strong>Threadlight could not reach its providers.</strong>
+      <p>No substitute response was shown.</p>
       <button className="text-button" type="button" onClick={onRetry}>
         <RefreshCw size={14} /> Try again
       </button>

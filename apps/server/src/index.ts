@@ -54,17 +54,26 @@ process.once("SIGTERM", () => {
 });
 
 try {
+  await app.listen({ host: config.HOST, port: config.PORT });
+
   if (config.DISCORD_REGISTER_COMMANDS && config.DISCORD_ENABLED) {
-    await registerDiscordCommands(
-      required(config.DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN"),
-      required(config.DISCORD_APPLICATION_ID, "DISCORD_APPLICATION_ID"),
-      required(config.DISCORD_GUILD_ID, "DISCORD_GUILD_ID"),
-    );
-    app.log.info({ guildId: config.DISCORD_GUILD_ID }, "Discord application commands registered");
+    try {
+      await registerDiscordCommands(
+        required(config.DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN"),
+        required(config.DISCORD_APPLICATION_ID, "DISCORD_APPLICATION_ID"),
+        required(config.DISCORD_GUILD_ID, "DISCORD_GUILD_ID"),
+      );
+      app.log.info({ guildId: config.DISCORD_GUILD_ID }, "Discord application commands registered");
+    } catch {
+      app.log.warn("Discord application command registration failed");
+    }
   }
 
-  await gateway?.start();
-  await app.listen({ host: config.HOST, port: config.PORT });
+  try {
+    await gateway?.start();
+  } catch {
+    app.log.warn("Threadlight is running without an active Discord gateway");
+  }
 } catch (error) {
   app.log.error(
     { errorName: error instanceof Error ? error.name : "UnknownError" },

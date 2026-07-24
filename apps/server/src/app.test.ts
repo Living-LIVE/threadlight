@@ -55,7 +55,11 @@ describe("Threadlight API", () => {
       NODE_ENV: "test",
       AI_PROVIDER: "fixture",
       SCRIPTURE_PROVIDER: "fixture",
-      DISCORD_ENABLED: "false",
+      DISCORD_ENABLED: "true",
+      DISCORD_APPLICATION_ID: "app-123",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-456",
+      DISCORD_CHANNEL_ID: "channel-789",
     });
     const orchestrator = new DefaultThreadlightOrchestrator({
       aiProvider: new FixtureAIProvider(),
@@ -70,6 +74,8 @@ describe("Threadlight API", () => {
           enabled: true,
           ready: false,
           state: "starting",
+          channelConfigured: true,
+          installUrl: expect.stringContaining("guild_id=guild-456"),
         },
       }),
     });
@@ -85,6 +91,40 @@ describe("Threadlight API", () => {
           enabled: true,
           ready: false,
           state: "starting",
+        },
+      },
+    });
+  });
+
+  it("does not infer readiness before an enabled Discord gateway starts", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "true",
+      DISCORD_APPLICATION_ID: "app-123",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-456",
+      DISCORD_CHANNEL_ID: "channel-789",
+    });
+    const orchestrator = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    const app = await buildApp({ config, orchestrator, logger: false });
+    openApps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/api/readiness" });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      ready: false,
+      development: {
+        discord: {
+          enabled: true,
+          ready: false,
+          state: "unknown",
+          channelConfigured: true,
         },
       },
     });

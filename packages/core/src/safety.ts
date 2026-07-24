@@ -79,3 +79,10 @@ export function urgentCarePrompt(): string {
     "A human community leader should follow up directly.",
   ].join(" ");
 }
+
+export function urgentCareMessage(): string {
+  return [
+    "Someone may be in immediate danger.",
+    "Please pause this conversation and prioritize direct human support now.",
+  ].join(" ");
+}

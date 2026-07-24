@@ -36,9 +36,10 @@ static delivery, and process lifecycle.
 
 The production build is a single Node.js process and a single Docker image. It contains the
 compiled web application, API, Discord gateway, core orchestration, and provider adapters.
-Startup fails when a selected provider or enabled Discord integration is missing required
-configuration. The process handles `SIGINT` and `SIGTERM`, disconnects Discord, and closes the
-HTTP server before exiting.
+Startup fails when a selected provider is missing required configuration. A Discord connection
+or command-registration failure leaves the HTTP service available for diagnosis and marks
+readiness unavailable. The process handles `SIGINT` and `SIGTERM`, disconnects Discord, and
+closes the HTTP server before exiting.
 
 Threadlight is intentionally stateless:
 
@@ -48,14 +49,16 @@ Threadlight is intentionally stateless:
 - Container replacement or laptop restart does not require data migration.
 
 The liveness endpoint reports whether the process can serve requests. The readiness endpoint
-separately reports whether an enabled Discord gateway is connected and whether competition
-provider credentials are configured.
+separately reports whether an enabled Discord gateway can access the configured guild and
+channel, exposes a sanitized install URL when authorization is incomplete, and reports whether
+competition provider credentials are configured.
 
 ### Web
 
-`apps/web` is a no-login demonstration of the same orchestration path used by Discord. It has
-fixture fallbacks for presentation resilience, but a successful live demo identifies the real
-providers in the provenance panel.
+`apps/web` is a no-login demonstration of the same orchestration path used by Discord. Bundled
+scenarios provide an explicit fixture preview before a request is sent. A successful request
+identifies the live providers in the provenance panel; a failed request shows an error and does
+not substitute fixture output.
 
 ## Provider Contracts
 
@@ -77,6 +80,7 @@ translation, attribution, and source metadata.
 ## Operator Boundary
 
 Configuration is supplied through environment variables, normally with `.env.local` and Docker
-Compose. Secrets are never accepted or exposed by the browser UI. An operator can bind the
-container to a dedicated host, register commands into one guild, restrict operation to one
-channel, and verify the resulting runtime through the health endpoints.
+Compose. Secrets are never accepted or exposed by the browser UI. The Runtime status drawer
+reports sanitized service, provider, gateway, and channel state. An operator can bind the
+container to a dedicated host, authorize and register commands into one guild, restrict
+operation to one channel, and verify the resulting runtime through the health endpoints.

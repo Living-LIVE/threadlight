@@ -39,7 +39,7 @@ export interface DiscordGatewayLogger {
 }
 
 export interface DiscordGatewayStatus {
-  readonly state: "stopped" | "starting" | "ready" | "stopping";
+  readonly state: "stopped" | "starting" | "ready" | "error" | "stopping";
   readonly ready: boolean;
 }
 
@@ -176,10 +176,22 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
       });
       await this.client.login(this.config.token);
       await ready;
+      await this.client.guilds.fetch(this.config.guildId);
+      if (this.config.channelId) {
+        const channel = await this.client.channels.fetch(this.config.channelId);
+        if (
+          !channel?.isTextBased() ||
+          !("guildId" in channel) ||
+          channel.guildId !== this.config.guildId
+        ) {
+          throw new Error("Configured Discord channel is not a text channel in the target guild");
+        }
+      }
       this.currentState = "ready";
       return this;
     } catch (error) {
-      this.currentState = "stopped";
+      this.client.destroy();
+      this.currentState = "error";
       this.logger.error("Discord gateway failed to start");
       throw error;
     }

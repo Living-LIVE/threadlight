@@ -48,6 +48,10 @@ Open `http://localhost:8787`. The container exposes:
 - `GET /api/readiness` for Discord and provider readiness.
 - The complete web experience at `/`.
 
+The web header's Runtime status control shows the same sanitized readiness state without
+exposing credentials. If Discord is not yet authorized, it provides the guild-specific install
+link while leaving the demo and health endpoints available.
+
 Stop the service with `docker compose down`. Threadlight does not require a database or external
 queue for its Discord-first deployment.
 
@@ -115,6 +119,7 @@ successful development build.
 - Context is fetched only after an explicit command, message action, or mention.
 - Conversation context is processed in memory and not persisted.
 - Urgent language triggers a deterministic care response before AI composition.
+- A failed live demo request is reported as a failure and never replaced with fixture output.
 - Threadlight does not claim to be a pastor, counselor, or emergency service.
 - Provider credentials remain server-side and `.env.local` is excluded from Git and Docker
   build context.

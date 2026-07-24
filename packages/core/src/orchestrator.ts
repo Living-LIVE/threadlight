@@ -3,6 +3,7 @@ import {
   applySafetyOverride,
   assessImmediateSafety,
   sanitizePublicText,
+  urgentCareMessage,
   urgentCarePrompt,
 } from "./safety.js";
 import type {
@@ -43,6 +44,32 @@ export class DefaultThreadlightOrchestrator implements ThreadlightOrchestrator {
     const safetyStarted = this.#now();
     const assessment = assessImmediateSafety(combinedText);
     steps.push(step("safety precheck", safetyStarted, this.#now(), "completed"));
+
+    if (assessment.riskLevel === "urgent") {
+      const finalSafetyStarted = this.#now();
+      const decision = {
+        action: "escalate" as const,
+        riskLevel: "urgent" as const,
+        reason:
+          assessment.reason ??
+          "The conversation contains language indicating possible immediate harm.",
+        pastoralIntent: "Prioritize immediate human support and safety.",
+        scriptureRequest: null,
+      };
+      steps.push({ name: "discernment", durationMs: 0, status: "skipped" });
+      steps.push({ name: "scripture retrieval", durationMs: 0, status: "skipped" });
+      steps.push({ name: "response composition", durationMs: 0, status: "skipped" });
+      steps.push(step("response safety", finalSafetyStarted, this.#now(), "completed"));
+      return {
+        decision,
+        reply: {
+          id: randomUUID(),
+          message: urgentCareMessage(),
+          carePrompt: urgentCarePrompt(),
+        },
+        trace: this.#trace(startedAt, steps),
+      };
+    }
 
     const discernmentStarted = this.#now();
     let decision = await this.#aiProvider.discern({

@@ -93,7 +93,30 @@ describe("DefaultThreadlightOrchestrator", () => {
   });
 
   it("forces human escalation for immediate-harm language", async () => {
-    const orchestrator = new DefaultThreadlightOrchestrator(providers());
+    let discernCalls = 0;
+    let composeCalls = 0;
+    let scriptureCalls = 0;
+    const urgentProviders = providers();
+    const orchestrator = new DefaultThreadlightOrchestrator({
+      aiProvider: {
+        ...urgentProviders.aiProvider,
+        async discern(input) {
+          discernCalls += 1;
+          return urgentProviders.aiProvider.discern(input);
+        },
+        async compose(input) {
+          composeCalls += 1;
+          return urgentProviders.aiProvider.compose(input);
+        },
+      },
+      scriptureProvider: {
+        ...urgentProviders.scriptureProvider,
+        async getPassage(request) {
+          scriptureCalls += 1;
+          return urgentProviders.scriptureProvider.getPassage(request);
+        },
+      },
+    });
     const result = await orchestrator.respond({
       ...baseRequest,
       prompt: "I am going to kill myself tonight.",
@@ -102,5 +125,14 @@ describe("DefaultThreadlightOrchestrator", () => {
     expect(result.decision.action).toBe("escalate");
     expect(result.decision.riskLevel).toBe("urgent");
     expect(result.reply?.carePrompt).toContain("trusted person");
+    expect(result.reply?.passage).toBeUndefined();
+    expect(discernCalls).toBe(0);
+    expect(composeCalls).toBe(0);
+    expect(scriptureCalls).toBe(0);
+    expect(result.trace.steps).toContainEqual({
+      name: "discernment",
+      durationMs: 0,
+      status: "skipped",
+    });
   });
 });

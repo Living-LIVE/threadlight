@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { DEMO_SCENARIOS, type ThreadlightOrchestrator } from "@threadlight/core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
+import { getDiscordInstallUrl } from "./discord/index.js";
 import { competitionReadiness, type ThreadlightConfig } from "./env.js";
 
 const AuthorSchema = z.object({
@@ -70,14 +71,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.get("/api/readiness", async (_request, reply) => {
     const runtime = options.runtimeStatus?.();
-    const ready = !runtime?.discord.enabled || runtime.discord.ready;
+    const discordEnabled = runtime?.discord.enabled ?? options.config.DISCORD_ENABLED;
+    const discordReady = runtime?.discord.ready ?? !options.config.DISCORD_ENABLED;
+    const ready = !discordEnabled || discordReady;
+    const discord = runtime?.discord ?? {
+      enabled: options.config.DISCORD_ENABLED,
+      ready: !options.config.DISCORD_ENABLED,
+      state: options.config.DISCORD_ENABLED ? "unknown" : "disabled",
+    };
     return reply.code(ready ? 200 : 503).send({
       ready,
       development: {
-        discord: runtime?.discord ?? {
-          enabled: options.config.DISCORD_ENABLED,
-          ready: !options.config.DISCORD_ENABLED,
-          state: options.config.DISCORD_ENABLED ? "unknown" : "disabled",
+        discord: {
+          ...discord,
+          installUrl:
+            options.config.DISCORD_ENABLED && options.config.DISCORD_APPLICATION_ID
+              ? getDiscordInstallUrl(
+                  options.config.DISCORD_APPLICATION_ID,
+                  options.config.DISCORD_GUILD_ID,
+                )
+              : null,
+          channelConfigured: Boolean(options.config.DISCORD_CHANNEL_ID),
         },
         ai: options.config.AI_PROVIDER,
         scripture: options.config.SCRIPTURE_PROVIDER,

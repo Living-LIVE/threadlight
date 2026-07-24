@@ -14,10 +14,10 @@ emergency service.
 
 ## Immediate-Risk Handling
 
-A deterministic precheck recognizes a small, auditable set of immediate-harm phrases. It can
-override model output to require human escalation. The resulting message encourages immediate
-contact with a trusted person or local emergency support without inventing or hardcoding a
-location-specific hotline.
+A deterministic precheck recognizes a small, auditable set of immediate-harm phrases. Urgent
+language bypasses AI discernment, Scripture retrieval, and AI composition entirely. The
+resulting message encourages immediate contact with a trusted person or local emergency support
+without inventing or hardcoding a location-specific hotline.
 
 ## Scripture Integrity
 
