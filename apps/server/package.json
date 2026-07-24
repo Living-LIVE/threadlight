@@ -1,0 +1,31 @@
+{
+  "name": "@threadlight/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup src/index.ts src/invite.ts src/register-commands.ts src/readiness.ts src/smoke.ts --format esm --sourcemap --clean",
+    "dev": "tsx watch --env-file=../../.env.local src/index.ts",
+    "invite:discord": "tsx --env-file=../../.env.local src/invite.ts",
+    "readiness": "tsx --env-file=../../.env.local src/readiness.ts",
+    "register:discord": "tsx --env-file=../../.env.local src/register-commands.ts",
+    "smoke:providers": "tsx --env-file=../../.env.local src/smoke.ts",
+    "start": "node --env-file-if-exists=../../.env.local dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.0",
+    "@fastify/static": "10.1.2",
+    "@threadlight/core": "workspace:*",
+    "@threadlight/providers": "workspace:*",
+    "discord.js": "14.27.0",
+    "fastify": "5.10.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "tsup": "8.5.1",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3"
+  }
+}

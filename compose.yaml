@@ -1,0 +1,26 @@
+services:
+  threadlight:
+    build:
+      context: .
+    image: threadlight:local
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      WEB_ORIGIN: http://localhost:8787
+    ports:
+      - "8787:8787"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
