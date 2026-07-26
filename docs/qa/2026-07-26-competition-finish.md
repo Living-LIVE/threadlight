@@ -24,6 +24,7 @@ Prepare Threadlight for competition handoff without submitting it.
 
 - [Submission handoff](../competition-submission.md)
 - [Competition readiness](../competition-readiness.md)
+- [Competition gallery asset manifest](../competition-assets.md)
 - [Local full-suite QA](2026-07-26-full-suite-local.md)
 - [YouTube connector QA](2026-07-26-youtube-comments-connector.md)
 - [Notebook run instructions](../../notebook/README.md)

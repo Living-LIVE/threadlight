@@ -16,7 +16,7 @@ blocks inside existing conversation habits rather than introducing another desti
 | Hosted dashboard | [Threadlight dashboard](https://threadlight.vercel.app) | Use for a live configuration walkthrough. |
 | Kaggle notebook | [Notebook instructions](../notebook/README.md) and `notebook/threadlight_demo.ipynb` | Publish the notebook and add its URL below. |
 | Demo video | Demo script below | Record/upload and add its public URL below. |
-| Cover image and media gallery | Capture from the live dashboard and controlled Discord/YouTube walkthrough | Upload to the competition form. |
+| Cover image and media gallery | [Prepared gallery assets](competition-assets.md), plus a controlled Discord/YouTube walkthrough | Upload to the competition form. |
 | Written description | Copy below | Paste and adapt to the form's field limits. |
 
 ## Final Submission Links
@@ -61,5 +61,6 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 - [Local full-suite ledger](qa/2026-07-26-full-suite-local.md)
 - [YouTube connector QA](qa/2026-07-26-youtube-comments-connector.md)
 - [Competition readiness notes](competition-readiness.md)
+- [Competition gallery asset manifest](competition-assets.md)
 - [Notebook run instructions](../notebook/README.md)
 - [Notebook execution evidence](qa/2026-07-26-competition-finish.md)
