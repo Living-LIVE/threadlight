@@ -1,0 +1,69 @@
+import { describe, expect, it, vi } from "vitest";
+import { GlooProvider } from "./gloo.js";
+
+describe("GlooProvider", () => {
+  it("uses a required function call for structured discernment", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        action: "respond",
+                        riskLevel: "normal",
+                        reason: "A brief response would help.",
+                        pastoralIntent: "Offer steady encouragement.",
+                        scriptureRequest: {
+                          bookId: "PSA",
+                          chapter: 34,
+                          verseStart: 18,
+                          verseEnd: null,
+                          reference: "Psalm 34:18",
+                        },
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      model: "auto",
+      fetchFn,
+    });
+
+    await expect(
+      provider.discern({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "explicit",
+      }),
+    ).resolves.toMatchObject({
+      action: "respond",
+      scriptureRequest: { reference: "Psalm 34:18" },
+    });
+
+    const [, request] = fetchFn.mock.calls[1] ?? [];
+    const body = JSON.parse(String(request?.body));
+    expect(body).toMatchObject({
+      auto_routing: true,
+      tool_choice: "required",
+      tools: [
+        {
+          type: "function",
+          function: { name: "record_threadlight_discernment" },
+        },
+      ],
+    });
+  });
+});
