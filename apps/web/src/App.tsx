@@ -862,6 +862,10 @@ function ConfigureAndLaunch({
     credential: apiKey,
     identity: providerIdentity,
   });
+  const selectProvider = (item: Provider) => {
+    if (item === "gloo" && provider !== "gloo") setModel("auto");
+    setProvider(item);
+  };
   const launch = async () => {
     setSaving(true);
     onError("");
@@ -949,7 +953,7 @@ function ConfigureAndLaunch({
               type="button"
               className={provider === item ? "provider selected" : "provider"}
               key={item}
-              onClick={() => setProvider(item)}
+              onClick={() => selectProvider(item)}
               aria-pressed={provider === item}
             >
               {item === "gloo"
@@ -1044,6 +1048,10 @@ function SettingsPanel({
   const [bibleId, setBibleId] = useState(initialScripture.bibleId);
   const [scriptureCredential, setScriptureCredential] = useState("");
   const [saving, setSaving] = useState(false);
+  const selectProvider = (item: Provider) => {
+    if (item === "gloo" && provider !== "gloo") setModel("auto");
+    setProvider(item);
+  };
   const save = async () => {
     setSaving(true);
     onError("");
@@ -1102,7 +1110,7 @@ function SettingsPanel({
               type="button"
               className={provider === item ? "provider selected" : "provider"}
               key={item}
-              onClick={() => setProvider(item)}
+              onClick={() => selectProvider(item)}
             >
               {item === "gloo"
                 ? "Gloo"
