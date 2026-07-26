@@ -14,9 +14,10 @@ Prepare Threadlight for competition handoff without submitting it.
 | Kaggle notebook | Ran the notebook's code path against a fresh local production server using fixture providers: readiness passed and the grief scenario returned a traced, attributed Psalm 34:18 response. |
 | Hosted dashboard | Vercel dashboard is live at `https://threadlight.vercel.app`. The current browser build permits Gloo launch only with both its client ID and secret, uses `auto` routing when Gloo is selected, and no longer presents Gloo as an uninstalled adapter. |
 | Hosted runtime | Railway control API reports Gloo `auto` configured, AO Lab Scripture configured, and the selected YouTube deployment running and ready with the Review policy. |
+| Hosted provider preview | The `Run a test response` dashboard action completed against the saved Railway configuration. The Gloo/AO canary returned `respond`, attributed Matthew 11:28-30 (BSB, AO Lab), and a trace showing completed safety, discernment, Scripture retrieval, composition, and response-safety stages in 13.787 seconds. |
 | Google OAuth | Railway callback is registered and the Preston Pope channel has authorized Threadlight. The selected-video allowlist contains only `We Paint!` (`hiuP2zXds2s`). |
 | Owner-comment safety canary | A clearly marked owner-authored comment was posted to `We Paint!`, then a manual connector scan completed at `2026-07-26T18:11:29.539Z`. The deployment remained ready with no error, zero drafts, and zero replies. This verifies owner comments do not trigger a draft or reply; it does not prove non-owner draft generation. |
-| Gloo | OAuth token exchange and one bounded completion canary succeeded. |
+| Gloo | OAuth token exchange, structured-output handling, and the hosted end-to-end provider preview succeeded. Railway deployment `5a8e4491-b4a1-40b7-adf8-dee1b5dadb7a` is running the current adapter; Vercel serves the preview dashboard at `https://threadlight.vercel.app`. |
 | YouVersion | Adapter is implemented and configuration is write-only in the dashboard. The supplied App Key returned `401` from the official API, so live passage retrieval is blocked pending a valid or activated App Key. |
 
 ## Handoff Artifacts
