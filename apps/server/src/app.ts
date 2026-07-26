@@ -6,8 +6,18 @@ import fastifyStatic from "@fastify/static";
 import { DEMO_SCENARIOS, type ThreadlightOrchestrator } from "@threadlight/core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
+import {
+  type Deployment,
+  DestinationCatalog,
+  DestinationKindSchema,
+  type LocalControlStore,
+  providerConfigured,
+  sanitizeConfig,
+} from "./control.js";
 import { getDiscordInstallUrl, type ParticipationStatus } from "./discord/index.js";
 import { competitionReadiness, type ThreadlightConfig } from "./env.js";
+import type { ThreadlightRuntimeManager } from "./runtime-manager.js";
+import { signOAuthState, verifyOAuthState, YouTubeClient } from "./youtube/index.js";
 
 const AuthorSchema = z.object({
   id: z.string().min(1).max(120),
@@ -33,6 +43,8 @@ type BuildAppOptions = {
   config: ThreadlightConfig;
   orchestrator: ThreadlightOrchestrator;
   logger?: boolean;
+  controlStore?: LocalControlStore;
+  runtimeManager?: ThreadlightRuntimeManager;
   runtimeStatus?: () => {
     discord: {
       enabled: boolean;
@@ -43,6 +55,71 @@ type BuildAppOptions = {
   };
 };
 
+const ProviderUpdateSchema = z.object({
+  ai: z
+    .object({
+      provider: z.enum(["openai", "gemini", "gloo", "bonfire"]).optional(),
+      model: z.string().trim().min(1).max(160).optional(),
+      openaiApiKey: z.string().trim().min(1).max(800).optional(),
+      geminiApiKey: z.string().trim().min(1).max(800).optional(),
+      glooClientId: z.string().trim().min(1).max(300).optional(),
+      glooClientSecret: z.string().trim().min(1).max(800).optional(),
+      glooModel: z.string().trim().min(1).max(160).optional(),
+      bonfireApiKey: z.string().trim().min(1).max(800).optional(),
+      bonfireModel: z.string().trim().min(1).max(160).optional(),
+    })
+    .optional(),
+  scripture: z
+    .object({
+      provider: z.enum(["ao", "youversion"]).optional(),
+      bibleId: z.string().trim().min(1).max(80).optional(),
+      youVersionAppKey: z.string().trim().min(1).max(800).optional(),
+    })
+    .optional(),
+});
+
+const DeploymentCreateSchema = z.object({
+  kind: DestinationKindSchema,
+  name: z.string().trim().min(1).max(120).optional(),
+});
+
+const DeploymentUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  discord: z
+    .object({
+      applicationId: z.string().trim().min(1).max(80).optional(),
+      publicKey: z.string().trim().min(1).max(160).optional(),
+      botToken: z.string().trim().min(1).max(800).optional(),
+      guildId: z.string().trim().min(1).max(80).optional(),
+      channelId: z.string().trim().min(1).max(80).optional(),
+      careRoleId: z.string().trim().min(1).max(80).optional(),
+      registerCommands: z.boolean().optional(),
+      participationMode: z.enum(["shy", "medium", "high"]).optional(),
+      quietSeconds: z.number().int().min(1).max(300).optional(),
+      cooldownSeconds: z.number().int().min(0).max(3600).optional(),
+    })
+    .optional(),
+  slack: z
+    .object({
+      workspaceName: z.string().trim().min(1).max(120).optional(),
+      botToken: z.string().trim().min(1).max(800).optional(),
+      channelId: z.string().trim().min(1).max(120).optional(),
+    })
+    .optional(),
+  youtube: z
+    .object({
+      channelId: z.string().trim().min(1).max(160).optional(),
+      channelName: z.string().trim().min(1).max(160).optional(),
+      clientId: z.string().trim().min(1).max(300).optional(),
+      clientSecret: z.string().trim().min(1).max(800).optional(),
+      refreshToken: z.string().trim().min(1).max(800).optional(),
+      replyMode: z.enum(["review", "selective", "high-touch"]).optional(),
+      pollSeconds: z.number().int().min(60).max(3_600).optional(),
+      dailyReplyLimit: z.number().int().min(1).max(100).optional(),
+    })
+    .optional(),
+});
+
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger:
@@ -51,10 +128,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     bodyLimit: 64 * 1024,
   });
   const limiter = new MemoryRateLimiter(20, 60_000);
+  const youtube = new YouTubeClient();
 
   await app.register(cors, {
     origin: options.config.WEB_ORIGIN,
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PATCH"],
   });
 
   app.get("/api/health", async () => {
@@ -112,6 +190,329 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       competition: competitionReadiness(options.config),
     });
   });
+
+  const controlStore = options.controlStore;
+  const runtimeManager = options.runtimeManager;
+  if (controlStore && runtimeManager) {
+    app.get("/api/control/status", async () => {
+      const config = await controlStore.load();
+      const runtime = await runtimeManager.status();
+      return {
+        catalog: DestinationCatalog,
+        youtubeCallbackUrl: youtubeCallbackUrl(options.config),
+        configuration: sanitizeConfig(config),
+        runtime,
+      };
+    });
+
+    app.post("/api/control/providers", async (request, reply) => {
+      const parsed = ProviderUpdateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_request", message: "Provider settings are invalid." });
+      }
+      await controlStore.update((config) => ({
+        ...config,
+        providers: {
+          ai: { ...config.providers.ai, ...parsed.data.ai },
+          scripture: { ...config.providers.scripture, ...parsed.data.scripture },
+        },
+      }));
+      await runtimeManager.reconcile();
+      return { ok: true };
+    });
+
+    app.post("/api/control/deployments", async (request, reply) => {
+      const parsed = DeploymentCreateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_request", message: "Deployment settings are invalid." });
+      }
+      const destination = DestinationCatalog.find((entry) => entry.kind === parsed.data.kind);
+      if (destination?.state !== "available") {
+        return reply.code(409).send({
+          error: "connector_unavailable",
+          message: "This destination is planned but is not available in this release.",
+        });
+      }
+      if (
+        parsed.data.kind === "discord" &&
+        (await controlStore.load()).deployments.some((deployment) => deployment.kind === "discord")
+      ) {
+        return reply.code(409).send({
+          error: "deployment_exists",
+          message:
+            "This release supports one Discord deployment. Open the existing destination to edit it.",
+        });
+      }
+      if (
+        parsed.data.kind === "youtube-comments" &&
+        (await controlStore.load()).deployments.some(
+          (deployment) => deployment.kind === "youtube-comments",
+        )
+      ) {
+        return reply.code(409).send({
+          error: "deployment_exists",
+          message:
+            "This release supports one YouTube Comments deployment. Open the existing destination to edit it.",
+        });
+      }
+      const now = new Date().toISOString();
+      const deployment: Deployment = {
+        id: randomUUID(),
+        kind: parsed.data.kind,
+        name: parsed.data.name ?? catalogLabel(parsed.data.kind),
+        state: "draft",
+        createdAt: now,
+        updatedAt: now,
+        ...(parsed.data.kind === "discord"
+          ? {
+              discord: {
+                registerCommands: false,
+                participationMode: "shy",
+                quietSeconds: 20,
+                cooldownSeconds: 180,
+              },
+            }
+          : {}),
+        ...(parsed.data.kind === "slack" ? { slack: {} } : {}),
+        ...(parsed.data.kind === "youtube-comments"
+          ? {
+              youtube: {
+                replyMode: "review",
+                pollSeconds: 180,
+                dailyReplyLimit: 12,
+                replyCount: 0,
+                processedCommentIds: [],
+                drafts: [],
+              },
+            }
+          : {}),
+      };
+      await controlStore.update((config) => ({
+        ...config,
+        deployments: [...config.deployments, deployment],
+      }));
+      return reply.code(201).send({ id: deployment.id });
+    });
+
+    app.patch("/api/control/deployments/:id", async (request, reply) => {
+      const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      const parsed = DeploymentUpdateSchema.safeParse(request.body);
+      if (!params.success || !parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_request", message: "Deployment settings are invalid." });
+      }
+      const current = await controlStore.load();
+      const existing = current.deployments.find((deployment) => deployment.id === params.data.id);
+      if (!existing) return reply.code(404).send({ error: "not_found" });
+
+      await controlStore.update((config) => ({
+        ...config,
+        deployments: config.deployments.map((deployment) =>
+          deployment.id !== params.data.id
+            ? deployment
+            : {
+                ...deployment,
+                ...(parsed.data.name ? { name: parsed.data.name } : {}),
+                ...(deployment.discord
+                  ? { discord: { ...deployment.discord, ...parsed.data.discord } }
+                  : {}),
+                ...(deployment.slack
+                  ? { slack: { ...deployment.slack, ...parsed.data.slack } }
+                  : {}),
+                ...(deployment.youtube
+                  ? { youtube: { ...deployment.youtube, ...parsed.data.youtube } }
+                  : {}),
+                updatedAt: new Date().toISOString(),
+              },
+        ),
+      }));
+      await runtimeManager.reconcile();
+      return { ok: true };
+    });
+
+    app.post("/api/control/deployments/:id/launch", async (request, reply) => {
+      const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      const config = await controlStore.load();
+      const deployment = config.deployments.find((entry) => entry.id === parsed.data.id);
+      if (!deployment) return reply.code(404).send({ error: "not_found" });
+      if (deployment.kind === "youtube-comments") {
+        if (!deploymentConfiguredForLaunch(deployment)) {
+          return reply.code(409).send({
+            error: "configuration_incomplete",
+            message: "Connect the YouTube channel and configure Threadlight before launching.",
+          });
+        }
+        if (
+          !providerConfigured(config.providers.ai) ||
+          config.providers.ai.provider !== "openai" ||
+          config.providers.scripture.provider !== "ao"
+        ) {
+          return reply.code(409).send({
+            error: "provider_unavailable",
+            message:
+              "Configure the OpenAI and AO Lab provider path before launching YouTube Comments.",
+          });
+        }
+        await runtimeManager.launch(parsed.data.id);
+        return { ok: true };
+      }
+      if (deployment.kind !== "discord") {
+        return reply.code(409).send({
+          error: "connector_unavailable",
+          message: "This destination is configured for a future connector release.",
+        });
+      }
+      await runtimeManager.launch(parsed.data.id);
+      return { ok: true };
+    });
+
+    app.post("/api/control/deployments/:id/pause", async (request, reply) => {
+      const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      const config = await controlStore.load();
+      if (!config.deployments.some((entry) => entry.id === parsed.data.id)) {
+        return reply.code(404).send({ error: "not_found" });
+      }
+      await runtimeManager.pause(parsed.data.id);
+      return { ok: true };
+    });
+
+    app.get("/api/oauth/youtube/start", async (request, reply) => {
+      const parsed = z.object({ deploymentId: z.string().uuid() }).safeParse(request.query);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      const deployment = (await controlStore.load()).deployments.find(
+        (entry) => entry.id === parsed.data.deploymentId && entry.kind === "youtube-comments",
+      );
+      const settings = deployment?.youtube;
+      if (!settings?.clientId || !settings.clientSecret) {
+        return reply.code(409).send({
+          error: "configuration_incomplete",
+          message: "Save the YouTube OAuth client ID and secret before connecting.",
+        });
+      }
+      const youtubeDeploymentId = deployment?.id;
+      if (!youtubeDeploymentId) return reply.code(404).send({ error: "not_found" });
+      return {
+        authorizationUrl: youtube.authorizationUrl(
+          {
+            clientId: settings.clientId,
+            clientSecret: settings.clientSecret,
+            redirectUri: youtubeCallbackUrl(options.config),
+          },
+          signOAuthState(youtubeDeploymentId, settings.clientSecret),
+        ),
+      };
+    });
+
+    app.get("/api/oauth/youtube/callback", async (request, reply) => {
+      const parsed = z
+        .object({
+          code: z.string().min(1).optional(),
+          state: z.string().min(1).optional(),
+          error: z.string().optional(),
+        })
+        .safeParse(request.query);
+      if (!parsed.success || !parsed.data.state || !parsed.data.code || parsed.data.error) {
+        return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
+      }
+      const candidateId = parsed.data.state.split(".")[0];
+      const deployment = (await controlStore.load()).deployments.find(
+        (entry) => entry.id === candidateId && entry.kind === "youtube-comments",
+      );
+      const settings = deployment?.youtube;
+      if (
+        !settings?.clientId ||
+        !settings.clientSecret ||
+        !verifyOAuthState(parsed.data.state, settings.clientSecret)
+      ) {
+        return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
+      }
+      const youtubeDeploymentId = deployment?.id;
+      if (!youtubeDeploymentId) {
+        return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
+      }
+      try {
+        const oauth = {
+          clientId: settings.clientId,
+          clientSecret: settings.clientSecret,
+          redirectUri: youtubeCallbackUrl(options.config),
+        };
+        const token = await youtube.exchangeCode(oauth, parsed.data.code);
+        const channel = await youtube.ownedChannel(token.accessToken);
+        await controlStore.update((config) => ({
+          ...config,
+          deployments: config.deployments.map((entry) =>
+            entry.id === youtubeDeploymentId && entry.youtube
+              ? {
+                  ...entry,
+                  youtube: {
+                    ...entry.youtube,
+                    channelId: channel.id,
+                    channelName: channel.name,
+                    refreshToken: token.refreshToken ?? entry.youtube.refreshToken,
+                  },
+                  updatedAt: new Date().toISOString(),
+                }
+              : entry,
+          ),
+        }));
+        return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connected`);
+      } catch {
+        return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
+      }
+    });
+
+    app.post("/api/control/deployments/:id/youtube/scan", async (request, reply) => {
+      const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      try {
+        await runtimeManager.scanYoutube(parsed.data.id);
+        return { ok: true };
+      } catch (error) {
+        return reply.code(409).send({
+          error: "youtube_scan_failed",
+          message: error instanceof Error ? error.message : "YouTube scan failed.",
+        });
+      }
+    });
+
+    app.post(
+      "/api/control/deployments/:id/youtube/drafts/:draftId/approve",
+      async (request, reply) => {
+        const parsed = z.object({ id: z.string().uuid(), draftId: z.string().uuid() }).safeParse({
+          ...(request.params as object),
+        });
+        if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+        try {
+          await runtimeManager.approveYoutubeDraft(parsed.data.id, parsed.data.draftId);
+          return { ok: true };
+        } catch (error) {
+          return reply.code(409).send({
+            error: "youtube_post_failed",
+            message: error instanceof Error ? error.message : "YouTube reply failed.",
+          });
+        }
+      },
+    );
+
+    app.post(
+      "/api/control/deployments/:id/youtube/drafts/:draftId/reject",
+      async (request, reply) => {
+        const parsed = z.object({ id: z.string().uuid(), draftId: z.string().uuid() }).safeParse({
+          ...(request.params as object),
+        });
+        if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+        await runtimeManager.rejectYoutubeDraft(parsed.data.id, parsed.data.draftId);
+        return { ok: true };
+      },
+    );
+  }
 
   app.get("/api/demo/scenarios", async () => ({
     scenarios: DEMO_SCENARIOS,
@@ -188,6 +589,24 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }
 
   return app;
+}
+
+function catalogLabel(kind: z.infer<typeof DestinationKindSchema>): string {
+  return DestinationCatalog.find((entry) => entry.kind === kind)?.label ?? "Destination";
+}
+
+function deploymentConfiguredForLaunch(deployment: Deployment) {
+  if (deployment.kind !== "youtube-comments") return true;
+  return Boolean(
+    deployment.youtube?.channelId &&
+      deployment.youtube.clientId &&
+      deployment.youtube.clientSecret &&
+      deployment.youtube.refreshToken,
+  );
+}
+
+function youtubeCallbackUrl(config: ThreadlightConfig) {
+  return `${config.THREADLIGHT_PUBLIC_URL}/api/oauth/youtube/callback`;
 }
 
 class MemoryRateLimiter {

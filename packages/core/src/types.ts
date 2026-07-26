@@ -58,7 +58,7 @@ export type ThreadlightResult = {
   trace: ThreadlightTrace;
 };
 
-export type ThreadlightSource = "discord" | "demo";
+export type ThreadlightSource = "discord" | "youtube" | "demo";
 export type ThreadlightIntent = "reflection" | "prayer";
 export type ThreadlightTrigger = "explicit" | "ambient" | "every-message";
 

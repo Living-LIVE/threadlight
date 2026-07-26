@@ -2,64 +2,75 @@
 
 **Scripture in the conversation, not beside it.**
 
-Threadlight is a Scripture-native presence for shared digital spaces. It listens to the recent
-conversation, exercises restraint about when to speak, retrieves an attributed passage, and
-responds in the room where the conversation is already happening.
+Threadlight is a self-hosted, Scripture-native presence for shared digital conversations. It
+listens with restraint, retrieves attributed Scripture, and responds in the place where people are
+already talking.
 
-Threadlight ships as one self-contained service. The same process serves the operator/demo web
-experience, API, provider orchestration, and Discord gateway. It is stateless by design: recent
-conversation context is processed in memory and is not retained after a response.
+It is built to be forked: one Node.js service serves the local operator dashboard, control API,
+provider orchestration, and Discord gateway. Discord and demo conversation context is processed
+in memory and is not retained after a response. YouTube review drafts retain bounded comment and
+reply excerpts locally until the operator resolves them.
 
-## Repository Layout
+> [!WARNING]
+> Threadlight is not a pastor, counselor, moderator, or emergency service. See the
+> [safety model](docs/safety.md) before enabling it in a community.
 
-```text
-apps/
-  server/       Discord gateway and public demo API
-  web/          Public no-login conversation experience
-packages/
-  core/         Provider-neutral domain contracts and orchestration
-  providers/    AI and Scripture provider adapters
-notebook/       Public, credential-free reference demonstration
-```
+## What Works Today
 
-## Local Development
+| Surface | Status | Notes |
+| --- | --- | --- |
+| Discord | Available | One configured Discord destination per Threadlight installation. |
+| OpenAI + AO Lab Scripture | Available | The executable provider path in this release. |
+| Local setup dashboard | Available | Credentials are stored locally and returned only as configured/not-configured state. |
+| Gemini, Gloo, Bonfire, YouVersion | Configuration-ready | Settings can be saved locally; runtime adapters are not yet included. |
+| YouTube Comments | Available after OAuth setup | Polls eligible comments, prepares review drafts, and supports explicit threaded replies. |
+| Slack | Planned | Visible in the dashboard, not yet selectable. |
+| Microsoft Teams, Twitch | Coming soon | Catalog-only placeholders. |
 
-1. Copy `.env.example` to `.env.local` and provide the credentials for the providers you intend
-   to run.
-2. Install dependencies with `pnpm install`.
-3. Start the server and web app with `pnpm dev`.
-4. Open `http://localhost:5173`.
+## Quick Start
 
-The API server runs at `http://localhost:8787` by default.
-
-## Run as a Container
-
-1. Copy `.env.example` to `.env.local`.
-2. Fill in the active AI, Scripture, and Discord settings.
-3. Build and start Threadlight:
+### Docker
 
 ```bash
 docker compose up --build -d
 ```
 
-Open `http://localhost:8787`. The container exposes:
+Open [http://localhost:8787](http://localhost:8787), then complete the three-step setup:
 
-- `GET /api/health` for process liveness.
-- `GET /api/readiness` for Discord and provider readiness.
-- The complete web experience at `/`.
+1. Choose Discord.
+2. Enter the Discord application, bot, server, and channel values.
+3. Choose a participation mode and configure the executable provider.
 
-The web header's Runtime status control shows the same sanitized readiness state without
-exposing credentials. If Discord is not yet authorized, it provides the guild-specific install
-link while leaving the demo and health endpoints available.
+Compose binds the dashboard to `127.0.0.1` and persists its configuration in the Docker-managed
+`threadlight-config` volume. Put an operator-authenticated reverse proxy in front of Threadlight
+before exposing it on a network.
 
-Stop the service with `docker compose down`. Threadlight does not require a database or external
-queue for its Discord-first deployment.
+### Local Development
 
-## Discord Setup
+Requirements: Node.js 22+ and pnpm 10.32.1. Corepack is included with Node.js.
 
-Create a Discord application and bot, enable the **Message Content Intent**, and install it into
-the target server with the `bot` and `applications.commands` scopes. The channel permissions
-required are:
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` requests to the local
+API at `http://127.0.0.1:8787`.
+
+The dashboard starts without credentials. Copy `.env.example` to `.env.local` only when you want
+to bootstrap existing local values:
+
+```bash
+cp .env.example .env.local
+```
+
+Never commit `.env.local`, Docker volumes, or `.threadlight/` configuration files.
+
+## Discord Prerequisites
+
+Create a Discord application and bot, enable **Message Content Intent**, and install it in the
+target server with the `bot` and `applications.commands` scopes. Grant the bot:
 
 - View Channels
 - Send Messages
@@ -68,39 +79,50 @@ required are:
 - Read Message History
 - Use Application Commands
 
-Set `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, and
-`DISCORD_CHANNEL_ID` in `.env.local`. Generate the guild-locked, least-privilege install URL:
+Threadlight responds to `/threadlight`, `/pray`, the **Ask Threadlight** message action, and
+explicit bot mentions. It ignores direct messages, unrelated channels, and bot messages.
+
+Generate a guild-locked install URL for an environment-based bootstrap with:
 
 ```bash
 pnpm --filter @threadlight/server invite:discord
 ```
 
-After an administrator authorizes that URL, register the guild commands once:
+See [Discord participation modes](docs/participation-modes.md) for the behavior contract and
+channel disclosure requirements.
 
-```bash
-docker compose run --rm threadlight node apps/server/dist/register-commands.js
+## Participation Modes
+
+- **Prompted**: speaks only when directly invited. This is the default.
+- **Attentive**: evaluates a conversation after a quiet window and replies when appropriate.
+- **Active**: responds to each eligible human text message. Use only in a dedicated channel or
+  thread.
+
+Attentive and Active send recent conversation context to the configured AI provider. Community
+operators should give participants a visible notice before enabling either mode.
+
+## Project Map
+
+```text
+apps/server/        Local control API, Discord gateway, and process lifecycle
+apps/web/           Local operator dashboard
+packages/core/      Provider-neutral domain contracts and orchestration
+packages/providers/ Provider adapters and fixture providers
+docs/               Product, architecture, safety, and operating documentation
+notebook/           Credential-free competition reference demonstration
 ```
 
-Threadlight responds to `/threadlight`, `/pray`, the **Ask Threadlight** message action, and
-explicit bot mentions. The configured channel and its child threads share the same participation
-policy while maintaining independent conversation context and timing. Threadlight ignores direct
-messages, other servers, unrelated channels, and messages from bots.
+## Documentation
 
-Set `DISCORD_PARTICIPATION_MODE` to control ambient participation:
+Start with the [documentation index](docs/README.md).
 
-- `shy`: only respond when explicitly invited.
-- `medium`: evaluate the conversation after a 20-second quiet window and respond when relevant,
-  with a three-minute ambient-response cooldown.
-- `high`: respond once to every eligible human text message. A response may omit Scripture when
-  a passage would feel forced.
-
-Administrators with Manage Server permission can inspect or temporarily change the effective
-mode with `/threadlight-mode`. High mode requires explicit confirmation, and command changes
-reset to the environment value when the service restarts. See
-[`docs/participation-modes.md`](docs/participation-modes.md) for the complete behavior contract.
-
-For startup-time command registration, set `DISCORD_REGISTER_COMMANDS=true`; leave it false after
-the first successful registration.
+- [Current state and roadmap](docs/current-state.md)
+- [Architecture](docs/architecture.md)
+- [Safety model](docs/safety.md)
+- [Discord participation modes](docs/participation-modes.md)
+- [Competition readiness](docs/competition-readiness.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 
 ## Validation
 
@@ -108,38 +130,20 @@ the first successful registration.
 pnpm check
 ```
 
-The command runs formatting and lint checks, TypeScript validation, unit tests, and production
-builds.
+This runs formatting and lint checks, TypeScript validation, unit tests, and production builds.
 
-Container validation:
+For the container surface:
 
 ```bash
 docker compose build
 docker compose up -d
 curl --fail http://localhost:8787/api/health
-curl --fail http://localhost:8787/api/readiness
+curl --fail http://localhost:8787/api/control/status
 ```
 
-## Provider Portability
+## Contributing And License
 
-AI and Scripture integrations implement provider-neutral contracts in `packages/core`. The
-active development adapters are configured with `AI_PROVIDER=openai` and
-`SCRIPTURE_PROVIDER=ao`. Competition credentials are tracked separately by
-`pnpm --filter @threadlight/server readiness`; provider readiness must not be inferred from a
-successful development build.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), follow the
+[Code of Conduct](CODE_OF_CONDUCT.md), and use the GitHub issue templates to propose changes.
 
-## Privacy and Safety
-
-- Message text is never written to application logs.
-- Shy mode fetches context only after an explicit invocation. Medium and High process recent
-  messages in the configured channel and its child threads without an explicit mention.
-- Conversation context is processed in memory and not persisted.
-- Urgent language triggers a deterministic care response before AI composition.
-- A failed live demo request is reported as a failure and never replaced with fixture output.
-- Threadlight does not claim to be a pastor, counselor, or emergency service.
-- Provider credentials remain server-side and `.env.local` is excluded from Git and Docker
-  build context.
-
-## License
-
-Apache-2.0. See `LICENSE`.
+Threadlight is licensed under [Apache-2.0](LICENSE).

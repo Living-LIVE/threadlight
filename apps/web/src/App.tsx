@@ -1,1245 +1,1238 @@
-import type { LucideIcon } from "lucide-react";
 import {
-  ArrowUp,
-  BookOpen,
-  Check,
-  ChevronDown,
+  ArrowRight,
   CircleAlert,
-  Clock3,
+  CirclePause,
   ExternalLink,
-  HeartHandshake,
-  Info,
-  LoaderCircle,
+  Flame,
+  LockKeyhole,
   MessageCircle,
-  RefreshCw,
-  Send,
+  Play,
+  Radio,
   Settings2,
   Sparkles,
   Users,
-  WifiOff,
-  X,
+  Video,
 } from "lucide-react";
 import {
+  cloneElement,
   type FormEvent,
-  type ReactNode,
+  isValidElement,
   useCallback,
   useEffect,
+  useId,
   useMemo,
-  useRef,
   useState,
 } from "react";
+import { canLaunchSelectedProvider } from "./launch-readiness.js";
+import { resolveStartupRoute } from "./startup-route.js";
+import { runYouTubeAction } from "./youtube-action.js";
 
-type Author = {
+type DestinationKind = "discord" | "slack" | "youtube-comments" | "teams" | "twitch";
+type Mode = "shy" | "medium" | "high";
+type Provider = "openai" | "gemini" | "gloo" | "bonfire";
+
+const participationModeLabels: Record<Mode, string> = {
+  shy: "Prompted",
+  medium: "Attentive",
+  high: "Active",
+};
+
+type Deployment = {
   id: string;
+  kind: DestinationKind;
   name: string;
-  avatarUrl?: string;
-  isAgent?: boolean;
-};
-
-type ChatMessage = {
-  id: string;
-  author: Author;
-  content: string;
-  createdAt: string;
-  displayTime?: string;
-};
-
-type Passage = {
-  reference: string;
-  text: string;
-  translation: string;
-  attribution: string;
-  sourceUrl?: string;
-};
-
-type ResponseData = {
-  reply: {
-    id: string;
-    message: string;
-    passage?: Passage;
-    prayerPrompt?: string;
-    carePrompt?: string;
+  state: "draft" | "running" | "paused" | "error";
+  configured: boolean;
+  discord?: {
+    applicationIdConfigured: boolean;
+    botTokenConfigured: boolean;
+    guildIdConfigured: boolean;
+    channelIdConfigured: boolean;
+    participationMode: Mode;
+    quietSeconds: number;
   };
-  decision: {
-    action: string;
-    riskLevel: string;
-    reason: string;
-  };
-  trace: {
-    id: string;
-    aiProvider: string;
-    scriptureProvider: string;
-    totalMs: number;
-    steps: Array<{ name: string; durationMs: number; status: string }>;
+  youtube?: {
+    channelId?: string;
+    channelName?: string;
+    clientIdConfigured: boolean;
+    clientSecretConfigured: boolean;
+    refreshTokenConfigured: boolean;
+    replyMode: "review" | "selective" | "high-touch";
+    pollSeconds: number;
+    dailyReplyLimit: number;
+    lastPollAt?: string;
+    lastError?: string;
+    lastSafetyAlert?: string;
+    replyCount: number;
+    drafts: Array<{
+      id: string;
+      authorName: string;
+      commentText: string;
+      replyText: string;
+      status: "pending" | "posted" | "rejected" | "skipped" | "failed";
+      error?: string;
+    }>;
   };
 };
 
-type RuntimeReadiness = {
-  ready: boolean;
-  development: {
-    discord: {
-      enabled: boolean;
-      ready: boolean;
-      state: string;
-      installUrl: string | null;
-      channelConfigured: boolean;
-      participation: {
-        mode: "shy" | "medium" | "high";
-        configuredMode: "shy" | "medium" | "high";
-        quietWindowMs: number;
-        cooldownMs: number;
-        maxQueueDepth: number;
-        pendingConversations: number;
-        queuedMessages: number;
-      };
+type ControlStatus = {
+  youtubeCallbackUrl: string;
+  catalog: Array<{
+    kind: DestinationKind;
+    label: string;
+    state: "available" | "planned" | "coming-soon";
+  }>;
+  configuration: {
+    providers: {
+      ai: { provider: Provider; model: string; configured: boolean };
+      scripture: { provider: "ao" | "youversion"; bibleId: string; configured: boolean };
     };
-    ai: string;
-    scripture: string;
+    deployments: Deployment[];
   };
-  competition: {
-    gloo: boolean;
-    youVersion: boolean;
+  runtime: {
+    deployments: Array<
+      | {
+          id: string;
+          state: Deployment["state"];
+          ready: boolean;
+          message?: string;
+        }
+      | undefined
+    >;
   };
 };
 
-type Scenario = {
-  id: string;
-  label: string;
-  description: string;
-  icon: LucideIcon;
-  messages: ChatMessage[];
-  prompt: string;
-  fixture: ResponseData;
+const icons = {
+  discord: MessageCircle,
+  slack: MessageCircle,
+  "youtube-comments": Video,
+  teams: Users,
+  twitch: Radio,
+} as const;
+
+const descriptions: Record<DestinationKind, string> = {
+  discord: "Respond in a server, channel, or thread.",
+  slack: "Bring care and reflection into a workspace.",
+  "youtube-comments": "Respond to conversations below your videos.",
+  teams: "Connect with conversations in Microsoft Teams.",
+  twitch: "Support a live chat with thoughtful presence.",
 };
 
-const AGENT: Author = { id: "threadlight", name: "Threadlight", isAgent: true };
-
-const makeMessage = (
-  id: string,
-  author: Author,
-  content: string,
-  displayTime: string,
-): ChatMessage => ({
-  id,
-  author,
-  content,
-  createdAt: displayTime === "now" ? new Date().toISOString() : demoTimeToIso(displayTime),
-  displayTime,
-});
-
-function demoTimeToIso(displayTime: string): string {
-  const match = /^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(displayTime);
-  if (!match) throw new Error(`Invalid demo time: ${displayTime}`);
-  const [, rawHour, minute, period] = match;
-  let hour = Number(rawHour) % 12;
-  if (period === "PM") hour += 12;
-  return `2026-07-24T${String(hour).padStart(2, "0")}:${minute}:00.000Z`;
+function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
+  const pendingDrafts = youtube.drafts.filter((draft) => draft.status === "pending").length;
+  const parts = [
+    youtube.channelName ?? "YouTube channel",
+    `${pendingDrafts} pending ${pendingDrafts === 1 ? "draft" : "drafts"}`,
+    `${youtube.replyCount}/${youtube.dailyReplyLimit} replies today`,
+  ];
+  if (youtube.lastPollAt) parts.push(`Last poll ${new Date(youtube.lastPollAt).toLocaleString()}`);
+  return parts.join(" · ");
 }
 
-const baseTrace = (id: string, totalMs: number): ResponseData["trace"] => ({
-  id,
-  aiProvider: "OpenAI demo fallback",
-  scriptureProvider: "AO Lab BSB demo fallback",
-  totalMs,
-  steps: [
-    { name: "Read the room", durationMs: 218, status: "completed" },
-    { name: "Discern a response", durationMs: 531, status: "completed" },
-    { name: "Ground in Scripture", durationMs: 764, status: "completed" },
-  ],
-});
-
-const bundledScenarios: [Scenario, ...Scenario[]] = [
-  {
-    id: "grief",
-    label: "Grief",
-    description: "When a room is carrying loss",
-    icon: HeartHandshake,
-    prompt: "What might help this room hold space for grief?",
-    messages: [
-      makeMessage(
-        "grief-1",
-        { id: "maya", name: "Maya" },
-        "We got the call this morning. Grandma is gone.",
-        "8:41 PM",
-      ),
-      makeMessage(
-        "grief-2",
-        { id: "eli", name: "Eli" },
-        "I don't know what to say, but I'm here with you.",
-        "8:43 PM",
-      ),
-      makeMessage(
-        "grief-3",
-        { id: "maya", name: "Maya" },
-        "Thank you. It still doesn't feel real.",
-        "8:44 PM",
-      ),
-    ],
-    fixture: {
-      reply: {
-        id: "grief-reply",
-        message:
-          "This room already has the right instinct: presence before answers. Grief does not need to be tidied up tonight. You can stay close, name the loss, and let the quiet be part of the care.",
-        passage: {
-          reference: "Psalm 34:18",
-          text: "The LORD is near to the brokenhearted; He saves the contrite in spirit.",
-          translation: "BSB",
-          attribution: "Berean Standard Bible · Scripture text via AO Lab",
-          sourceUrl: "https://berean.bible/",
-        },
-        carePrompt: "What would it look like to simply stay with Maya for the next few minutes?",
-      },
-      decision: {
-        action: "respond with presence",
-        riskLevel: "normal",
-        reason: "The room is asking for companionship, not a solution.",
-      },
-      trace: baseTrace("trace-grief-4c2", 1513),
-    },
-  },
-  {
-    id: "conflict",
-    label: "Conflict",
-    description: "When the room needs a slower pace",
-    icon: MessageCircle,
-    prompt: "How can this conversation move toward repair?",
-    messages: [
-      makeMessage(
-        "conflict-1",
-        { id: "jordan", name: "Jordan" },
-        "I felt dismissed in that meeting, and I am still carrying it.",
-        "7:18 PM",
-      ),
-      makeMessage(
-        "conflict-2",
-        { id: "sam", name: "Sam" },
-        "That wasn't my intent. I thought we were just moving quickly.",
-        "7:20 PM",
-      ),
-      makeMessage(
-        "conflict-3",
-        { id: "jordan", name: "Jordan" },
-        "I hear that, but the impact was real for me.",
-        "7:21 PM",
-      ),
-    ],
-    fixture: {
-      reply: {
-        id: "conflict-reply",
-        message:
-          "There is room here for intent and impact to be named without one canceling the other. A next step could be to reflect back what was heard before defending what was meant.",
-        passage: {
-          reference: "James 1:19",
-          text: "My beloved brothers, understand this: Everyone should be quick to listen, slow to speak, and slow to anger.",
-          translation: "BSB",
-          attribution: "Berean Standard Bible · Scripture text via AO Lab",
-          sourceUrl: "https://berean.bible/",
-        },
-        carePrompt: "What would Jordan need to hear reflected back before the room moves on?",
-      },
-      decision: {
-        action: "make space to listen",
-        riskLevel: "normal",
-        reason: "The conversation can continue safely if listening comes before resolution.",
-      },
-      trace: baseTrace("trace-conflict-82a", 1698),
-    },
-  },
-  {
-    id: "encouragement",
-    label: "Encouragement",
-    description: "When someone needs a steady word",
-    icon: Sparkles,
-    prompt: "What steady word could this room offer?",
-    messages: [
-      makeMessage(
-        "encourage-1",
-        { id: "noah", name: "Noah" },
-        "The interview went badly. I think I blew my only chance.",
-        "6:03 PM",
-      ),
-      makeMessage(
-        "encourage-2",
-        { id: "ruth", name: "Ruth" },
-        "One hard hour does not get to name your whole story.",
-        "6:05 PM",
-      ),
-    ],
-    fixture: {
-      reply: {
-        id: "encourage-reply",
-        message:
-          "The care already moving through this room is specific and grounded. Encouragement can tell the truth about the hard moment while refusing to make it the final word.",
-        passage: {
-          reference: "Galatians 6:9",
-          text: "Let us not grow weary in well-doing, for in due time we will reap a harvest if we do not give up.",
-          translation: "BSB",
-          attribution: "Berean Standard Bible · Scripture text via AO Lab",
-          sourceUrl: "https://berean.bible/",
-        },
-        carePrompt: "What is one true thing about Noah that is still true after this interview?",
-      },
-      decision: {
-        action: "offer encouragement",
-        riskLevel: "normal",
-        reason: "The room is already offering grounded support and can reinforce it.",
-      },
-      trace: baseTrace("trace-encourage-31f", 1442),
-    },
-  },
-  {
-    id: "prayer",
-    label: "Prayer",
-    description: "When the room wants to turn toward God",
-    icon: BookOpen,
-    prompt: "Could this room pray together?",
-    messages: [
-      makeMessage(
-        "prayer-1",
-        { id: "ada", name: "Ada" },
-        "Could we pause and pray for the families affected by the storm?",
-        "5:36 PM",
-      ),
-      makeMessage(
-        "prayer-2",
-        { id: "leo", name: "Leo" },
-        "Yes. I have a friend in the north side who lost power.",
-        "5:38 PM",
-      ),
-    ],
-    fixture: {
-      reply: {
-        id: "prayer-reply",
-        message:
-          "A simple prayer can hold the people you know and the people you do not. Begin with what is present: shelter for those without it, courage for responders, and care that reaches the isolated.",
-        passage: {
-          reference: "Philippians 4:6",
-          text: "Be anxious for nothing, but in everything, by prayer and petition, with thanksgiving, present your requests to God.",
-          translation: "BSB",
-          attribution: "Berean Standard Bible · Scripture text via AO Lab",
-          sourceUrl: "https://berean.bible/",
-        },
-        prayerPrompt:
-          "God, be near to the families without power tonight. Give wisdom to those offering help, and make our care practical. Amen.",
-      },
-      decision: {
-        action: "offer a prayer",
-        riskLevel: "normal",
-        reason: "The room explicitly asked to pray and named a concrete need.",
-      },
-      trace: baseTrace("trace-prayer-74b", 1586),
-    },
-  },
-];
-
-const defaultScenario = bundledScenarios[0];
-if (!defaultScenario) throw new Error("Threadlight fixture scenarios are missing");
-const defaultResponse = defaultScenario.fixture;
-
-function normalizeScenario(value: unknown, index: number): Scenario | null {
-  if (!value || typeof value !== "object") return null;
-  const source = value as Record<string, unknown>;
-  const id = typeof source.id === "string" ? source.id : `scenario-${index}`;
-  const label =
-    typeof source.label === "string"
-      ? source.label
-      : typeof source.name === "string"
-        ? source.name
-        : id;
-  const description =
-    typeof source.description === "string" ? source.description : "A shared room moment";
-  const fallback =
-    bundledScenarios.find((scenario) => scenario.id === id) ??
-    bundledScenarios[index % bundledScenarios.length] ??
-    defaultScenario;
-  return { ...fallback, id, label, description };
-}
-
-async function loadScenarios(): Promise<Scenario[]> {
-  const response = await fetch("/api/demo/scenarios");
-  if (!response.ok) throw new Error(`Scenario request failed with ${response.status}`);
-  const body = (await response.json()) as { scenarios?: unknown };
-  const scenarios = Array.isArray(body.scenarios)
-    ? body.scenarios
-        .map(normalizeScenario)
-        .filter((scenario): scenario is Scenario => scenario !== null)
-    : [];
-  if (scenarios.length === 0) throw new Error("No scenarios returned");
-  return scenarios;
-}
-
-async function requestResponse(
-  scenario: Scenario,
-  messages: ChatMessage[],
-  prompt: string,
-): Promise<ResponseData> {
-  const response = await fetch("/api/demo/respond", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scenarioId: scenario.id, messages, prompt }),
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: { "content-type": "application/json", ...init?.headers },
   });
-  if (!response.ok) throw new Error(`Response request failed with ${response.status}`);
-  const data = (await response.json()) as ResponseData;
-  if (!data.reply?.message || !data.decision || !data.trace) {
-    throw new Error("Response contract was incomplete");
+  if (!response.ok) {
+    const body = (await response.json().catch(() => undefined)) as { message?: string } | undefined;
+    throw new Error(body?.message ?? "Threadlight could not save that change.");
   }
-  return data;
-}
-
-async function loadRuntimeReadiness(): Promise<RuntimeReadiness> {
-  const response = await fetch("/api/readiness");
-  if (response.status !== 200 && response.status !== 503) {
-    throw new Error(`Readiness request failed with ${response.status}`);
-  }
-  return (await response.json()) as RuntimeReadiness;
-}
-
-function runtimeConnection(
-  runtime: RuntimeReadiness | null,
-  runtimeError: boolean,
-  isChecking: boolean,
-  isOffline: boolean,
-): { label: string; tone: "live" | "muted" | "warn" } {
-  if (isOffline) return { label: "Offline", tone: "warn" };
-  if (isChecking) return { label: "Checking", tone: "muted" };
-  if (runtimeError || !runtime) return { label: "Demo only", tone: "warn" };
-  if (!runtime.development.discord.enabled) {
-    return { label: "Local preview", tone: "muted" };
-  }
-  if (runtime.development.discord.ready) {
-    return { label: "Discord ready", tone: "live" };
-  }
-  return { label: "Discord setup", tone: "warn" };
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-function Avatar({ author, size = "normal" }: { author: Author; size?: "normal" | "small" }) {
-  return (
-    <div
-      className={`avatar avatar-${size} ${author.isAgent ? "avatar-agent" : ""}`}
-      aria-hidden="true"
-    >
-      {author.avatarUrl ? (
-        <img src={author.avatarUrl} alt="" />
-      ) : author.isAgent ? (
-        <Sparkles size={size === "small" ? 13 : 16} />
-      ) : (
-        initials(author.name)
-      )}
-    </div>
-  );
-}
-
-function StatusDot({ tone = "live" }: { tone?: "live" | "muted" | "warn" }) {
-  return <span className={`status-dot status-dot-${tone}`} aria-hidden="true" />;
-}
-
-function IconButton({
-  label,
-  children,
-  onClick,
-  disabled = false,
-  buttonRef,
-}: {
-  label: string;
-  children: ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  buttonRef?: { current: HTMLButtonElement | null };
-}) {
-  return (
-    <button
-      ref={buttonRef}
-      className="icon-button"
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
-    </button>
-  );
+  return (await response.json()) as T;
 }
 
 export function App() {
-  const [scenarios, setScenarios] = useState<Scenario[]>(bundledScenarios);
-  const [scenarioId, setScenarioId] = useState("grief");
-  const [messages, setMessages] = useState<ChatMessage[]>(defaultScenario.messages);
-  const [response, setResponse] = useState<ResponseData | null>(defaultResponse);
-  const [prompt, setPrompt] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingScenarios, setIsLoadingScenarios] = useState(true);
-  const [scenarioError, setScenarioError] = useState(false);
-  const [responseError, setResponseError] = useState(false);
-  const [responseSource, setResponseSource] = useState<"fixture" | "live">("fixture");
-  const [runtime, setRuntime] = useState<RuntimeReadiness | null>(null);
-  const [runtimeError, setRuntimeError] = useState(false);
-  const [isCheckingRuntime, setIsCheckingRuntime] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const [isOffline, setIsOffline] = useState(
-    () => typeof navigator !== "undefined" && !navigator.onLine,
+  const [status, setStatus] = useState<ControlStatus>();
+  const [screen, setScreen] = useState<"home" | "choose" | "connect" | "launch" | "settings">(
+    "choose",
   );
-  const [showProvenance, setShowProvenance] = useState(false);
-  const responseRegionRef = useRef<HTMLElement>(null);
-  const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const settingsCloseRef = useRef<HTMLButtonElement>(null);
-  const settingsDialogRef = useRef<HTMLElement>(null);
+  const [selectedId, setSelectedId] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
 
-  const selectedScenario = useMemo(
-    () => scenarios.find((scenario) => scenario.id === scenarioId) ?? defaultScenario,
-    [scenarioId, scenarios],
-  );
+  const refresh = useCallback(async () => {
+    const next = await request<ControlStatus>("/api/control/status");
+    setStatus(next);
+    return next;
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    loadScenarios()
-      .then((result) => {
-        if (!active) return;
-        setScenarios(result);
-        setScenarioError(false);
-        setIsLoadingScenarios(false);
+    void refresh()
+      .then((next) => {
+        const youtubeResult = new URLSearchParams(window.location.search).get("youtube");
+        const route = resolveStartupRoute(
+          next.configuration.deployments,
+          youtubeResult === "connected" || youtubeResult === "connection-failed"
+            ? youtubeResult
+            : undefined,
+        );
+        setSelectedId(route.selectedId);
+        setScreen(route.screen);
+        if (route.notice) setError(route.notice);
+        if (youtubeResult) window.history.replaceState({}, "", window.location.pathname);
       })
-      .catch(() => {
-        if (!active) return;
-        setScenarios(bundledScenarios);
-        setScenarioError(true);
-        setIsLoadingScenarios(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const refreshRuntime = useCallback(async () => {
-    setIsCheckingRuntime(true);
-    try {
-      setRuntime(await loadRuntimeReadiness());
-      setRuntimeError(false);
-    } catch {
-      setRuntime(null);
-      setRuntimeError(true);
-    } finally {
-      setIsCheckingRuntime(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshRuntime();
-  }, [refreshRuntime]);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!showSettings) return;
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowSettings(false);
-        return;
-      }
-      if (event.key !== "Tab" || !settingsDialogRef.current) return;
-      const focusable = Array.from(
-        settingsDialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]"),
+      .catch((reason: unknown) =>
+        setError(reason instanceof Error ? reason.message : "Unable to reach Threadlight."),
       );
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-    settingsCloseRef.current?.focus();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-      settingsButtonRef.current?.focus();
-    };
-  }, [showSettings]);
+  }, [refresh]);
 
-  const selectScenario = (nextId: string) => {
-    const nextScenario =
-      scenarios.find((scenario) => scenario.id === nextId) ??
-      bundledScenarios.find((scenario) => scenario.id === nextId) ??
-      defaultScenario;
-    setScenarioId(nextScenario.id);
-    setMessages(nextScenario.messages);
-    setResponse(nextScenario.fixture);
-    setResponseSource("fixture");
-    setPrompt("");
-    setResponseError(false);
-    setShowProvenance(false);
-  };
+  const selected = useMemo(
+    () => status?.configuration.deployments.find((deployment) => deployment.id === selectedId),
+    [selectedId, status],
+  );
 
-  const sendPrompt = async (event?: FormEvent) => {
-    event?.preventDefault();
-    const nextPrompt = prompt.trim();
-    if (!nextPrompt || isLoading) return;
-    const userMessage = makeMessage(
-      `local-${Date.now()}`,
-      { id: "you", name: "You" },
-      nextPrompt,
-      "now",
-    );
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
-    setPrompt("");
-    setIsLoading(true);
-    setResponseError(false);
-    setShowProvenance(false);
+  const createDeployment = async (kind: DestinationKind) => {
+    setBusy(true);
+    setError(undefined);
     try {
-      setResponse(await requestResponse(selectedScenario, nextMessages, nextPrompt));
-      setResponseSource("live");
-      window.setTimeout(() => {
-        responseRegionRef.current?.focus({ preventScroll: true });
-        if (window.matchMedia("(max-width: 780px)").matches) {
-          responseRegionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 0);
-    } catch {
-      setResponse(null);
-      setResponseError(true);
-      window.setTimeout(() => responseRegionRef.current?.focus(), 0);
+      const created = await request<{ id: string }>("/api/control/deployments", {
+        method: "POST",
+        body: JSON.stringify({ kind }),
+      });
+      await refresh();
+      setSelectedId(created.id);
+      setScreen("connect");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to add this destination.");
     } finally {
-      setIsLoading(false);
+      setBusy(false);
     }
   };
 
-  const connection = runtimeConnection(runtime, runtimeError, isCheckingRuntime, isOffline);
+  const openDeployment = (deployment: Deployment) => {
+    setSelectedId(deployment.id);
+    setScreen("connect");
+  };
+
+  if (!status)
+    return (
+      <Loading
+        error={error}
+        onRetry={() =>
+          void refresh().catch((reason: unknown) =>
+            setError(reason instanceof Error ? reason.message : "Unable to reach Threadlight."),
+          )
+        }
+      />
+    );
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">
-            <Sparkles size={16} />
-          </div>
-          <span className="brand-name">Threadlight</span>
-          <span className="brand-divider" aria-hidden="true" />
-          <span className="room-label">Wednesday night room</span>
-        </div>
-        <div className="topbar-actions">
-          <div className="connection-status" role="status">
-            {isOffline ? <WifiOff size={14} /> : <StatusDot tone={connection.tone} />}
-            <span>{connection.label}</span>
-          </div>
-          <IconButton
-            label="Runtime status"
-            buttonRef={settingsButtonRef}
-            onClick={() => setShowSettings(true)}
-          >
-            <Settings2 size={17} />
-          </IconButton>
-        </div>
-      </header>
-
-      {isOffline && (
-        <div className="offline-banner" role="status">
-          <WifiOff size={15} />
-          <span>You are offline. Saved room scenarios are still available.</span>
-        </div>
+    <main className="app-shell">
+      <Header onSettings={() => setScreen("settings")} />
+      {error && <Notice text={error} />}
+      {screen === "choose" && (
+        <ChooseDestination catalog={status.catalog} busy={busy} onChoose={createDeployment} />
       )}
-
-      <main className="room-layout">
-        <section className="stage-column" aria-label="Live room visual">
-          <div className="live-stage">
-            <img
-              className="room-image"
-              src="/threadlight-room.png"
-              alt=""
-              onError={(event) => {
-                event.currentTarget.style.display = "none";
-              }}
-            />
-            <div className="stage-fallback" aria-hidden="true">
-              <div className="fallback-window fallback-window-one" />
-              <div className="fallback-window fallback-window-two" />
-              <div className="fallback-lamp" />
-              <div className="fallback-table" />
-              <div className="fallback-bible">
-                <BookOpen size={26} />
-              </div>
-            </div>
-            <div className="stage-tint" />
-            <div className="stage-topline">
-              <span className="live-tag">DEMO ROOM</span>
-            </div>
-            <div className="stage-caption">
-              <div>
-                <p className="eyebrow">COMMUNITY ROOM / 04</p>
-                <h1>A little more room for one another.</h1>
-              </div>
-              <div className="stage-participants">
-                <Users size={15} />
-                <span>12 present</span>
-              </div>
-            </div>
-          </div>
-          <div className="stage-meta">
-            <div>
-              <span className="meta-label">Room host</span>
-              <strong>Ruth &amp; friends</strong>
-            </div>
-            <div>
-              <span className="meta-label">Gathered since</span>
-              <strong>8:00 PM</strong>
-            </div>
-            <div className="stage-meta-end">
-              <span className="meta-label">Presence</span>
-              <strong>
-                <StatusDot /> 12 people
-              </strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="conversation-column" aria-label="Shared conversation">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">SHARED CONVERSATION</p>
-              <h2>Room chat</h2>
-            </div>
-            <IconButton label="Refresh room" onClick={() => selectScenario(scenarioId)}>
-              <RefreshCw size={16} />
-            </IconButton>
-          </div>
-          <fieldset className="scenario-selector">
-            <legend className="sr-only">Choose a room moment</legend>
-            <div className="selector-header">
-              <span className="meta-label">Room moment</span>
-              {isLoadingScenarios ? (
-                <LoaderCircle className="spin" size={14} aria-label="Loading scenarios" />
-              ) : (
-                <span className="selector-count">{scenarios.length} available</span>
-              )}
-            </div>
-            <div className="scenario-list">
-              {scenarios.map((scenario) => {
-                const Icon = scenario.icon;
-                return (
-                  <button
-                    key={scenario.id}
-                    className={`scenario-tab ${scenario.id === scenarioId ? "selected" : ""}`}
-                    type="button"
-                    aria-pressed={scenario.id === scenarioId}
-                    onClick={() => selectScenario(scenario.id)}
-                  >
-                    <Icon size={15} />
-                    <span>{scenario.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {scenarioError && (
-              <p className="inline-error">
-                <CircleAlert size={14} /> Bundled room moments shown; live catalog unavailable.
-              </p>
-            )}
-          </fieldset>
-          <div className="chat-feed" aria-live="polite">
-            {messages.length === 0 ? (
-              <EmptyState onStart={() => selectScenario(scenarioId)} />
-            ) : (
-              messages.map((message) => <ChatMessageRow key={message.id} message={message} />)
-            )}
-            {isLoading && <LoadingMessage />}
-          </div>
-          <form className="composer" onSubmit={sendPrompt}>
-            <label htmlFor="room-prompt" className="sr-only">
-              Write to the room
-            </label>
-            <textarea
-              id="room-prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={selectedScenario.prompt}
-              rows={2}
-              disabled={isLoading}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void sendPrompt();
-                }
-              }}
-            />
-            <div className="composer-footer">
-              <span className="composer-hint">
-                Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line
-              </span>
-              <button
-                className="send-button"
-                type="submit"
-                disabled={!prompt.trim() || isLoading}
-                aria-label="Send message"
-                title="Send message"
-              >
-                <Send size={16} />
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <aside
-          ref={responseRegionRef}
-          className="threadlight-column"
-          aria-label="Threadlight response"
-          tabIndex={-1}
-        >
-          <div className="agent-heading">
-            <div className="agent-heading-icon">
-              <Sparkles size={17} />
-            </div>
-            <div>
-              <p className="eyebrow">THREADLIGHT</p>
-              <h2>Room response</h2>
-            </div>
-            <span className="agent-live">
-              <StatusDot tone={isLoading ? "warn" : "muted"} />
-              {isLoading ? "responding" : "ready on request"}
-            </span>
-          </div>
-          {isLoading ? (
-            <ResponseLoading />
-          ) : responseError ? (
-            <ResponseError
-              onRetry={() => {
-                setResponseError(false);
-                setPrompt(selectedScenario.prompt);
-              }}
-            />
-          ) : response ? (
-            <ResponsePanel
-              response={response}
-              responseSource={responseSource}
-              showProvenance={showProvenance}
-              onToggleProvenance={() => setShowProvenance((value) => !value)}
-            />
-          ) : (
-            <EmptyResponse />
-          )}
-          <div className="agent-boundary">
-            <Info size={14} />
-            <span>
-              Threadlight offers a moment of discernment, not counseling or emergency care.
-            </span>
-          </div>
-        </aside>
-      </main>
-      {showSettings && (
-        <RuntimeStatusDialog
-          runtime={runtime}
-          runtimeError={runtimeError}
-          isChecking={isCheckingRuntime}
-          closeRef={settingsCloseRef}
-          dialogRef={settingsDialogRef}
-          onClose={() => setShowSettings(false)}
-          onRefresh={() => void refreshRuntime()}
+      {screen === "connect" && selected && (
+        <ConnectDestination
+          deployment={selected}
+          youtubeCallbackUrl={status.youtubeCallbackUrl}
+          onBack={() => setScreen("choose")}
+          onContinue={() => setScreen("launch")}
+          onSaved={refresh}
+          onError={setError}
         />
       )}
+      {screen === "launch" && selected && (
+        <ConfigureAndLaunch
+          deployment={selected}
+          initialProvider={status.configuration.providers.ai}
+          initialScripture={status.configuration.providers.scripture}
+          onBack={() => setScreen("connect")}
+          onLaunched={async () => {
+            await refresh();
+            setScreen("home");
+          }}
+          onError={setError}
+        />
+      )}
+      {screen === "home" && (
+        <LiveDashboard
+          status={status}
+          onAdd={() => {
+            setSelectedId(undefined);
+            setScreen("choose");
+          }}
+          onOpen={openDeployment}
+          onPause={async (id) => {
+            try {
+              await request(`/api/control/deployments/${id}/pause`, { method: "POST" });
+              await refresh();
+            } catch (reason) {
+              setError(
+                reason instanceof Error ? reason.message : "Unable to pause this destination.",
+              );
+            }
+          }}
+        />
+      )}
+      {screen === "settings" && (
+        <SettingsPanel
+          initialProvider={status.configuration.providers.ai}
+          initialScripture={status.configuration.providers.scripture}
+          onBack={() => setScreen(status.configuration.deployments.length ? "home" : "choose")}
+          onSaved={async () => {
+            await refresh();
+            setScreen("home");
+          }}
+          onError={setError}
+        />
+      )}
+    </main>
+  );
+}
+
+function Header({ onSettings }: { onSettings: () => void }) {
+  return (
+    <header className="topbar">
+      <div className="brand">
+        <Flame size={19} />
+        <span>Threadlight</span>
+      </div>
+      <div className="topbar-actions">
+        <span className="local-state">
+          <i />
+          Local control
+        </span>
+        <button className="icon-button" type="button" onClick={onSettings} aria-label="Settings">
+          <Settings2 size={18} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Loading({ error, onRetry }: { error?: string; onRetry: () => void }) {
+  return (
+    <main className="app-shell">
+      <Header onSettings={() => undefined} />
+      <section className="loading">
+        <Sparkles size={22} />
+        <p>{error ?? "Opening your local Threadlight..."}</p>
+        {error && (
+          <button className="text-button" type="button" onClick={onRetry}>
+            Try again
+          </button>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function Notice({ text }: { text: string }) {
+  return (
+    <div className="notice" role="alert">
+      <CircleAlert size={16} />
+      {text}
     </div>
   );
 }
 
-function RuntimeStatusDialog({
-  runtime,
-  runtimeError,
-  isChecking,
-  closeRef,
-  dialogRef,
-  onClose,
-  onRefresh,
+function ChooseDestination({
+  catalog,
+  busy,
+  onChoose,
 }: {
-  runtime: RuntimeReadiness | null;
-  runtimeError: boolean;
-  isChecking: boolean;
-  closeRef: { current: HTMLButtonElement | null };
-  dialogRef: { current: HTMLElement | null };
-  onClose: () => void;
-  onRefresh: () => void;
+  catalog: ControlStatus["catalog"];
+  busy: boolean;
+  onChoose: (kind: DestinationKind) => void;
 }) {
-  const discord = runtime?.development.discord;
-  const serviceStatus = isChecking
-    ? { label: "Checking", tone: "muted" as const }
-    : runtimeError
-      ? { label: "Unavailable", tone: "warn" as const }
-      : { label: "Online", tone: "live" as const };
-  const discordStatus = !discord?.enabled
-    ? { label: "Disabled", tone: "muted" as const }
-    : discord.ready
-      ? { label: "Connected", tone: "live" as const }
-      : discord.state === "starting"
-        ? { label: "Connecting", tone: "muted" as const }
-        : discord.state === "error"
-          ? { label: "Setup required", tone: "warn" as const }
-          : { label: "Not connected", tone: "warn" as const };
-
   return (
-    <div className="settings-backdrop">
-      <section
-        ref={dialogRef}
-        className="settings-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="runtime-status-title"
-      >
-        <header className="settings-heading">
-          <div>
-            <p className="eyebrow">STANDALONE SERVICE</p>
-            <h2 id="runtime-status-title">Runtime status</h2>
-          </div>
-          <div className="settings-actions">
-            <IconButton label="Refresh runtime status" onClick={onRefresh} disabled={isChecking}>
-              <RefreshCw className={isChecking ? "spin" : ""} size={17} />
-            </IconButton>
+    <section className="wizard narrow">
+      <p className="step">Step 1 of 3</p>
+      <p className="eyebrow">Start a deployment</p>
+      <h1 id="destination-heading">Choose a destination.</h1>
+      <p className="lede">Threadlight can serve one or more places. Start with one.</p>
+      <section className="route-list" aria-labelledby="destination-heading">
+        {catalog.map((destination) => {
+          const Icon = icons[destination.kind];
+          const unavailable = destination.state !== "available";
+          const availabilityLabel = destination.state === "planned" ? "Planned" : "Coming soon";
+          return (
             <button
-              ref={closeRef}
-              className="icon-button"
+              className={`route-row ${unavailable ? "unavailable" : ""}`}
               type="button"
-              aria-label="Close runtime status"
-              title="Close runtime status"
-              onClick={onClose}
+              key={destination.kind}
+              disabled={busy || unavailable}
+              onClick={() => onChoose(destination.kind)}
             >
-              <X size={18} />
+              <span className="route-icon">
+                <Icon size={22} />
+              </span>
+              <span>
+                <strong>{destination.label}</strong>
+                <small>{unavailable ? availabilityLabel : descriptions[destination.kind]}</small>
+              </span>
+              {unavailable ? (
+                <small className="coming">{availabilityLabel}</small>
+              ) : (
+                <ArrowRight size={18} />
+              )}
+            </button>
+          );
+        })}
+      </section>
+      <p className="local-note">
+        <LockKeyhole size={15} />
+        Keys and settings stay in your local Threadlight volume.
+      </p>
+    </section>
+  );
+}
+
+function ConnectDestination({
+  deployment,
+  youtubeCallbackUrl,
+  onBack,
+  onContinue,
+  onSaved,
+  onError,
+}: {
+  deployment: Deployment;
+  youtubeCallbackUrl: string;
+  onBack: () => void;
+  onContinue: () => void;
+  onSaved: () => Promise<unknown>;
+  onError: (value: string) => void;
+}) {
+  if (deployment.kind === "youtube-comments") {
+    return (
+      <YouTubeConnection
+        deployment={deployment}
+        youtubeCallbackUrl={youtubeCallbackUrl}
+        onBack={onBack}
+        onContinue={onContinue}
+        onSaved={onSaved}
+        onError={onError}
+      />
+    );
+  }
+  if (deployment.kind !== "discord")
+    return <PlannedConnector deployment={deployment} onBack={onBack} />;
+  return (
+    <DiscordConnection
+      deployment={deployment}
+      onBack={onBack}
+      onContinue={onContinue}
+      onSaved={onSaved}
+      onError={onError}
+    />
+  );
+}
+
+function DiscordConnection({
+  deployment,
+  onBack,
+  onContinue,
+  onSaved,
+  onError,
+}: {
+  deployment: Deployment;
+  onBack: () => void;
+  onContinue: () => void;
+  onSaved: () => Promise<unknown>;
+  onError: (value: string) => void;
+}) {
+  const [form, setForm] = useState({ applicationId: "", botToken: "", guildId: "", channelId: "" });
+  const [saving, setSaving] = useState(false);
+  const saved = deployment.discord;
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    onError("");
+    try {
+      await request(`/api/control/deployments/${deployment.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ discord: omitEmpty(form) }),
+      });
+      await onSaved();
+      onContinue();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "Unable to save Discord settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="wizard form-wizard">
+      <p className="step">Step 2 of 3</p>
+      <p className="eyebrow">Connect Discord</p>
+      <h1>Choose where Threadlight listens.</h1>
+      <p className="lede">
+        Use the application and bot you created in Discord. These values never leave this machine.
+      </p>
+      <form onSubmit={submit}>
+        <Field
+          label="Application ID"
+          hint={saved?.applicationIdConfigured ? "Saved locally" : "From your Discord application"}
+        >
+          <input
+            value={form.applicationId}
+            onChange={(event) => setForm({ ...form, applicationId: event.target.value })}
+            placeholder={
+              saved?.applicationIdConfigured ? "Already configured" : "123456789012345678"
+            }
+          />
+        </Field>
+        <Field
+          label="Bot token"
+          hint={saved?.botTokenConfigured ? "Saved locally" : "From the Bot page"}
+        >
+          <input
+            value={form.botToken}
+            onChange={(event) => setForm({ ...form, botToken: event.target.value })}
+            type="password"
+            placeholder={saved?.botTokenConfigured ? "Already configured" : "Paste bot token"}
+          />
+        </Field>
+        <div className="field-grid">
+          <Field label="Server ID">
+            <input
+              value={form.guildId}
+              onChange={(event) => setForm({ ...form, guildId: event.target.value })}
+              placeholder={saved?.guildIdConfigured ? "Already configured" : "Discord server ID"}
+            />
+          </Field>
+          <Field label="Channel ID">
+            <input
+              value={form.channelId}
+              onChange={(event) => setForm({ ...form, channelId: event.target.value })}
+              placeholder={saved?.channelIdConfigured ? "Already configured" : "Discord channel ID"}
+            />
+          </Field>
+        </div>
+        <p className="helper">
+          <ExternalLink size={14} />
+          Enable Message Content Intent before continuing.
+        </p>
+        <div className="form-actions">
+          <button type="button" className="text-button" onClick={onBack}>
+            Back
+          </button>
+          <button type="submit" className="primary" disabled={saving}>
+            {saving ? (
+              "Saving..."
+            ) : (
+              <>
+                Continue <ArrowRight size={17} />
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function YouTubeConnection({
+  deployment,
+  youtubeCallbackUrl,
+  onBack,
+  onContinue,
+  onSaved,
+  onError,
+}: {
+  deployment: Deployment;
+  youtubeCallbackUrl: string;
+  onBack: () => void;
+  onContinue: () => void;
+  onSaved: () => Promise<unknown>;
+  onError: (value: string) => void;
+}) {
+  const saved = deployment.youtube;
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [replyMode, setReplyMode] = useState(saved?.replyMode ?? "review");
+  const [pollSeconds, setPollSeconds] = useState(String(saved?.pollSeconds ?? 180));
+  const [dailyReplyLimit, setDailyReplyLimit] = useState(String(saved?.dailyReplyLimit ?? 12));
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    await request(`/api/control/deployments/${deployment.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        youtube: {
+          ...omitEmpty({ clientId, clientSecret }),
+          replyMode,
+          pollSeconds: Number(pollSeconds),
+          dailyReplyLimit: Number(dailyReplyLimit),
+        },
+      }),
+    });
+    await onSaved();
+  };
+  const connect = async () => {
+    setBusy(true);
+    onError("");
+    try {
+      await save();
+      const { authorizationUrl } = await request<{ authorizationUrl: string }>(
+        `/api/oauth/youtube/start?deploymentId=${deployment.id}`,
+      );
+      window.location.assign(authorizationUrl);
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "Unable to start YouTube connection.");
+      setBusy(false);
+    }
+  };
+  const action = async (path: string, persistSettings = false) => {
+    setBusy(true);
+    try {
+      await runYouTubeAction(save, () => request(path, { method: "POST" }), persistSettings);
+      await onSaved();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "Unable to update YouTube Comments.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const connected = Boolean(saved?.channelId && saved?.refreshTokenConfigured);
+  return (
+    <section className="wizard form-wizard">
+      <p className="step">YouTube Comments</p>
+      <p className="eyebrow">Connect YouTube</p>
+      <h1>Bring Threadlight below your videos.</h1>
+      <p className="lede">Comments become drafts by default. You choose what gets posted.</p>
+      {!connected ? (
+        <>
+          <details className="setup-note">
+            <summary>Before you connect</summary>
+            <p>
+              In Google Cloud, enable YouTube Data API v3 and add this authorized redirect URI to
+              your Web OAuth client:
+            </p>
+            <code>{youtubeCallbackUrl}</code>
+          </details>
+          <Field
+            label="OAuth client ID"
+            hint={saved?.clientIdConfigured ? "Saved locally" : "From Google Cloud"}
+          >
+            <input
+              value={clientId}
+              onChange={(event) => setClientId(event.target.value)}
+              placeholder={saved?.clientIdConfigured ? "Already configured" : "Paste client ID"}
+            />
+          </Field>
+          <Field
+            label="OAuth client secret"
+            hint={saved?.clientSecretConfigured ? "Saved locally" : "From Google Cloud"}
+          >
+            <input
+              type="password"
+              value={clientSecret}
+              onChange={(event) => setClientSecret(event.target.value)}
+              placeholder={
+                saved?.clientSecretConfigured ? "Already configured" : "Paste client secret"
+              }
+            />
+          </Field>
+          <div className="form-actions">
+            <button type="button" className="text-button" onClick={onBack}>
+              Back
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void connect()}
+              disabled={busy}
+            >
+              {busy ? "Connecting..." : "Connect YouTube"}
             </button>
           </div>
-        </header>
-
-        <div className="settings-section">
-          <span className="settings-section-label">Service</span>
-          <StatusRow label="Web and API" value={serviceStatus.label} tone={serviceStatus.tone} />
-          <StatusRow
-            label="AI provider"
-            value={runtime?.development.ai ?? "Unavailable"}
-            tone={runtime ? "live" : "muted"}
-          />
-          <StatusRow
-            label="Scripture provider"
-            value={runtime?.development.scripture ?? "Unavailable"}
-            tone={runtime ? "live" : "muted"}
-          />
-        </div>
-
-        <div className="settings-section">
-          <span className="settings-section-label">Discord</span>
-          <StatusRow label="Gateway" value={discordStatus.label} tone={discordStatus.tone} />
-          <StatusRow
-            label="Channel"
-            value={discord?.channelConfigured ? "Configured" : "Not configured"}
-            tone={discord?.channelConfigured ? "live" : "muted"}
-          />
-          <StatusRow
-            label="Participation"
-            value={formatParticipationMode(discord?.participation.mode)}
-            tone={discord?.participation.mode === "high" ? "warn" : "live"}
-          />
-          {discord?.participation.mode === "medium" && (
-            <StatusRow
-              label="Ambient cadence"
-              value={`${discord.participation.quietWindowMs / 1_000}s quiet · ${discord.participation.cooldownMs / 60_000}m cooldown`}
-              tone="muted"
-            />
-          )}
-          {Boolean(discord?.participation.queuedMessages) && (
-            <StatusRow
-              label="Queued messages"
-              value={String(discord?.participation.queuedMessages)}
-              tone="muted"
-            />
-          )}
-          {discord?.enabled && !discord.ready && discord.installUrl && (
-            <a className="settings-link" href={discord.installUrl} target="_blank" rel="noreferrer">
-              Authorize Discord <ExternalLink size={14} />
-            </a>
-          )}
-        </div>
-
-        <div className="settings-section">
-          <span className="settings-section-label">Submission providers</span>
-          <StatusRow
-            label="Gloo"
-            value={runtime?.competition.gloo ? "Ready" : "Pending credentials"}
-            tone={runtime?.competition.gloo ? "live" : "muted"}
-          />
-          <StatusRow
-            label="YouVersion"
-            value={runtime?.competition.youVersion ? "Ready" : "Pending credentials"}
-            tone={runtime?.competition.youVersion ? "live" : "muted"}
-          />
-        </div>
-
-        <footer className="settings-footer">
-          <Info size={14} />
-          <span>Credentials remain in the server environment and are never shown here.</span>
-          <a href="/api/readiness" target="_blank" rel="noreferrer">
-            JSON <ExternalLink size={12} />
-          </a>
-        </footer>
-      </section>
-    </div>
-  );
-}
-
-function formatParticipationMode(mode?: "shy" | "medium" | "high") {
-  if (!mode) return "Unavailable";
-  return `${mode.charAt(0).toUpperCase()}${mode.slice(1)}`;
-}
-
-function StatusRow({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "live" | "muted" | "warn";
-}) {
-  return (
-    <div className="settings-row">
-      <span>{label}</span>
-      <strong>
-        <StatusDot tone={tone} />
-        {value}
-      </strong>
-    </div>
-  );
-}
-
-function ChatMessageRow({ message }: { message: ChatMessage }) {
-  return (
-    <article className={`chat-message ${message.author.id === "you" ? "is-you" : ""}`}>
-      <Avatar author={message.author} />
-      <div className="message-body">
-        <div className="message-meta">
-          <strong>{message.author.name}</strong>
-          <span>{message.displayTime ?? formatMessageTime(message.createdAt)}</span>
-        </div>
-        <p>{message.content}</p>
-      </div>
-    </article>
-  );
-}
-
-function formatMessageTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function LoadingMessage() {
-  return (
-    <div className="loading-message" role="status">
-      <Avatar author={AGENT} size="small" />
-      <div className="loading-lines">
-        <span />
-        <span />
-        <span />
-      </div>
-      <span className="loading-label">Listening…</span>
-    </div>
-  );
-}
-
-function EmptyState({ onStart }: { onStart: () => void }) {
-  return (
-    <div className="empty-state">
-      <div className="empty-icon">
-        <MessageCircle size={20} />
-      </div>
-      <strong>This room is quiet.</strong>
-      <p>Choose a room moment to bring the conversation back into view.</p>
-      <button type="button" className="text-button" onClick={onStart}>
-        Load room moment <ArrowUp size={14} />
-      </button>
-    </div>
-  );
-}
-
-function ResponsePanel({
-  response,
-  responseSource,
-  showProvenance,
-  onToggleProvenance,
-}: {
-  response: ResponseData;
-  responseSource: "fixture" | "live";
-  showProvenance: boolean;
-  onToggleProvenance: () => void;
-}) {
-  const prompt = response.reply.carePrompt ?? response.reply.prayerPrompt;
-  return (
-    <div className="response-stack">
-      <div className="response-intro">
-        <Avatar author={AGENT} />
-        <div>
-          <strong>Here is what I notice.</strong>
-          <span>
-            {responseSource === "live" ? "Live provider response" : "Bundled demo response"}
-          </span>
-        </div>
-      </div>
-      <p className="response-message">{response.reply.message}</p>
-      {response.reply.passage && (
-        <div className="passage-block">
-          <div className="passage-topline">
-            <BookOpen size={15} />
-            <span>Scripture for this moment</span>
-            <a
-              href={response.reply.passage.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open ${response.reply.passage.reference} source`}
+        </>
+      ) : (
+        <>
+          <p className="helper">
+            <ExternalLink size={14} /> Connected to {saved?.channelName ?? "your YouTube channel"}
+          </p>
+          <Field label="Reply policy">
+            <select
+              value={replyMode}
+              onChange={(event) => setReplyMode(event.target.value as typeof replyMode)}
             >
-              <ArrowUp size={13} />
-            </a>
+              <option value="review">Review every reply</option>
+              <option value="selective">Selective automatic replies</option>
+              <option value="high-touch">High-touch review queue</option>
+            </select>
+          </Field>
+          <div className="field-grid">
+            <Field label="Polling interval (seconds)">
+              <input
+                type="number"
+                min="60"
+                max="3600"
+                value={pollSeconds}
+                onChange={(event) => setPollSeconds(event.target.value)}
+              />
+            </Field>
+            <Field label="Daily reply limit">
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={dailyReplyLimit}
+                onChange={(event) => setDailyReplyLimit(event.target.value)}
+              />
+            </Field>
           </div>
-          <blockquote>“{response.reply.passage.text}”</blockquote>
-          <div className="passage-attribution">
-            <strong>{response.reply.passage.reference}</strong>
-            <span>
-              {response.reply.passage.translation} · {response.reply.passage.attribution}
-            </span>
-          </div>
-        </div>
+          {deployment.state === "running" ? (
+            <div className="form-actions">
+              <button
+                type="button"
+                className="text-button"
+                onClick={() =>
+                  void action(`/api/control/deployments/${deployment.id}/youtube/scan`, true)
+                }
+                disabled={busy}
+              >
+                Scan now
+              </button>
+              <button type="button" className="primary" onClick={() => void save()} disabled={busy}>
+                {busy ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          ) : (
+            <div className="form-actions">
+              <button type="button" className="text-button" onClick={onBack}>
+                Back
+              </button>
+              <button type="button" className="primary" onClick={onContinue} disabled={busy}>
+                Configure Threadlight <ArrowRight size={17} />
+              </button>
+            </div>
+          )}
+          {saved?.lastError && <p className="error-copy">{saved.lastError}</p>}
+          {saved?.lastSafetyAlert && <p className="status-note">{saved.lastSafetyAlert}</p>}
+          {saved?.drafts
+            .filter((draft) => draft.status === "pending" || draft.status === "failed")
+            .map((draft) => (
+              <article className="deployment-row" key={draft.id}>
+                <div>
+                  <strong>
+                    {draft.authorName} {draft.status === "failed" ? "· Needs attention" : ""}
+                  </strong>
+                  <small className="draft-label">Original comment</small>
+                  <small>{draft.commentText}</small>
+                  <small className="draft-label">Proposed reply</small>
+                  <small>{draft.replyText}</small>
+                  {draft.error && <small className="error-copy">{draft.error}</small>}
+                </div>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    void action(
+                      `/api/control/deployments/${deployment.id}/youtube/drafts/${draft.id}/reject`,
+                    )
+                  }
+                  disabled={busy}
+                >
+                  {draft.status === "failed" ? "Dismiss" : "Reject"}
+                </button>
+                {draft.status === "pending" && (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() =>
+                      void action(
+                        `/api/control/deployments/${deployment.id}/youtube/drafts/${draft.id}/approve`,
+                      )
+                    }
+                    disabled={busy}
+                  >
+                    Post reply
+                  </button>
+                )}
+              </article>
+            ))}
+        </>
       )}
-      {prompt && (
-        <div className="care-prompt">
-          <span className="prompt-label">
-            <HeartHandshake size={14} /> A gentle next question
-          </span>
-          <p>{prompt}</p>
-        </div>
-      )}
-      <div className="decision-row">
-        <div>
-          <span className="meta-label">Suggested action</span>
-          <strong>{response.decision.action}</strong>
-        </div>
-        <span className="risk-badge">
-          <Check size={13} /> {response.decision.riskLevel} risk
-        </span>
-      </div>
-      <p className="decision-reason">{response.decision.reason}</p>
-      <button
-        className="provenance-toggle"
-        type="button"
-        aria-label={showProvenance ? "Hide response provenance" : "Show response provenance"}
-        aria-expanded={showProvenance}
-        onClick={onToggleProvenance}
-      >
-        <span>
-          <Clock3 size={14} /> Response provenance
-        </span>
-        <ChevronDown className={showProvenance ? "rotated" : ""} size={15} />
-      </button>
-      {showProvenance && <Provenance trace={response.trace} />}
-    </div>
+    </section>
   );
 }
 
-function Provenance({ trace }: { trace: ResponseData["trace"] }) {
+function PlannedConnector({ deployment, onBack }: { deployment: Deployment; onBack: () => void }) {
+  const name = deployment.kind === "slack" ? "Slack" : "YouTube Comments";
   return (
-    <section className="provenance" aria-label="Response provenance details">
-      <div className="provenance-grid">
-        <div>
-          <span>Trace ID</span>
-          <strong>{trace.id}</strong>
-        </div>
-        <div>
-          <span>Total time</span>
-          <strong>{trace.totalMs}ms</strong>
-        </div>
-      </div>
-      <div className="provider-row">
-        <span>AI provider</span>
-        <strong>{trace.aiProvider}</strong>
-      </div>
-      <div className="provider-row">
-        <span>Scripture provider</span>
-        <strong>{trace.scriptureProvider}</strong>
-      </div>
-      <div className="trace-steps">
-        {trace.steps.map((step) => (
-          <div key={step.name} className="trace-step">
-            <span>
-              <StatusDot
-                tone={
-                  step.status === "completed"
-                    ? "live"
-                    : step.status === "skipped"
-                      ? "muted"
-                      : "warn"
+    <section className="wizard narrow">
+      <p className="step">Step 2 of 3</p>
+      <p className="eyebrow">{name}</p>
+      <h1>{name} is next.</h1>
+      <p className="lede">
+        This deployment slot is saved locally. Its connector needs an OAuth implementation before
+        Threadlight can launch there.
+      </p>
+      <button type="button" className="primary" onClick={onBack}>
+        Choose another destination
+      </button>
+    </section>
+  );
+}
+
+function ConfigureAndLaunch({
+  deployment,
+  initialProvider,
+  initialScripture,
+  onBack,
+  onLaunched,
+  onError,
+}: {
+  deployment: Deployment;
+  initialProvider: ControlStatus["configuration"]["providers"]["ai"];
+  initialScripture: ControlStatus["configuration"]["providers"]["scripture"];
+  onBack: () => void;
+  onLaunched: () => Promise<void>;
+  onError: (value: string) => void;
+}) {
+  const [provider, setProvider] = useState<Provider>(initialProvider.provider);
+  const [model, setModel] = useState(initialProvider.model);
+  const [apiKey, setApiKey] = useState("");
+  const [providerIdentity, setProviderIdentity] = useState("");
+  const [mode, setMode] = useState<Mode>(deployment.discord?.participationMode ?? "shy");
+  const [saving, setSaving] = useState(false);
+  const providerAlreadyConfigured =
+    initialProvider.configured && provider === initialProvider.provider;
+  const providerReady = canLaunchSelectedProvider({
+    provider,
+    alreadyConfigured: providerAlreadyConfigured,
+    credential: apiKey,
+  });
+  const launch = async () => {
+    setSaving(true);
+    onError("");
+    try {
+      const providerKey =
+        provider === "openai"
+          ? apiKey
+            ? { openaiApiKey: apiKey }
+            : {}
+          : provider === "gemini"
+            ? apiKey
+              ? { geminiApiKey: apiKey }
+              : {}
+            : provider === "gloo"
+              ? {
+                  ...(providerIdentity ? { glooClientId: providerIdentity } : {}),
+                  ...(apiKey ? { glooClientSecret: apiKey } : {}),
+                  glooModel: model,
                 }
+              : { ...(apiKey ? { bonfireApiKey: apiKey } : {}), bonfireModel: model };
+      await request("/api/control/providers", {
+        method: "POST",
+        body: JSON.stringify({
+          ai: { provider, model, ...providerKey },
+          scripture: initialScripture,
+        }),
+      });
+      if (deployment.kind === "discord") {
+        await request(`/api/control/deployments/${deployment.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ discord: { participationMode: mode } }),
+        });
+      }
+      await request(`/api/control/deployments/${deployment.id}/launch`, { method: "POST" });
+      await onLaunched();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "Unable to launch Threadlight.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="wizard form-wizard">
+      <p className="step">Step 3 of 3</p>
+      <p className="eyebrow">
+        {deployment.kind === "discord" ? "Set Threadlight's presence" : "Configure Threadlight"}
+      </p>
+      <h1>
+        {deployment.kind === "discord"
+          ? "Choose how Threadlight responds."
+          : "Choose Threadlight's model."}
+      </h1>
+      <p className="lede">
+        {deployment.kind === "discord"
+          ? "Start quietly. You can change this for this destination any time."
+          : "Your connected YouTube channel will use this local provider configuration."}
+      </p>
+      {deployment.kind === "discord" && (
+        <div className="mode-row">
+          {(["shy", "medium", "high"] as Mode[]).map((item) => (
+            <button
+              type="button"
+              className={`mode ${mode === item ? "selected" : ""}`}
+              key={item}
+              onClick={() => setMode(item)}
+              aria-pressed={mode === item}
+            >
+              <strong>{participationModeLabels[item]}</strong>
+              <small>
+                {item === "shy"
+                  ? "Only when asked."
+                  : item === "medium"
+                    ? "When a room needs a thoughtful response."
+                    : "Respond to every message."}
+              </small>
+            </button>
+          ))}
+        </div>
+      )}
+      <section className="provider-section">
+        <p className="eyebrow">Model provider</p>
+        <div className="provider-row">
+          {(["openai", "gemini", "gloo", "bonfire"] as Provider[]).map((item) => (
+            <button
+              type="button"
+              className={provider === item ? "provider selected" : "provider"}
+              key={item}
+              onClick={() => setProvider(item)}
+              aria-pressed={provider === item}
+            >
+              {item === "gloo"
+                ? "Gloo"
+                : item === "bonfire"
+                  ? "Bonfire"
+                  : item[0]?.toUpperCase() + item.slice(1)}
+            </button>
+          ))}
+        </div>
+        {provider !== "openai" && (
+          <p className="status-note">
+            This provider can be saved now; its live runtime adapter is still being added.
+          </p>
+        )}
+        <div className="field-grid">
+          <Field label="Model">
+            <input
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              placeholder="Model name"
+            />
+          </Field>
+          {provider === "gloo" && (
+            <Field label="Gloo client ID">
+              <input
+                value={providerIdentity}
+                onChange={(event) => setProviderIdentity(event.target.value)}
+                placeholder="Client ID"
               />
-              {step.name}
-            </span>
-            <strong>{step.status === "skipped" ? "Skipped" : `${step.durationMs}ms`}</strong>
-          </div>
-        ))}
+            </Field>
+          )}
+          <Field
+            label={provider === "gloo" ? "Gloo client secret" : "Provider credential"}
+            hint={
+              initialProvider.configured && provider === initialProvider.provider
+                ? "A credential is already saved locally"
+                : undefined
+            }
+          >
+            <input
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              type="password"
+              placeholder="Paste credential"
+            />
+          </Field>
+        </div>
+      </section>
+      <div className="form-actions">
+        <button type="button" className="text-button" onClick={onBack}>
+          Back
+        </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={saving || !providerReady}
+          onClick={() => void launch()}
+        >
+          {saving ? (
+            "Launching..."
+          ) : (
+            <>
+              <Play size={16} />
+              Launch Threadlight
+            </>
+          )}
+        </button>
       </div>
     </section>
   );
 }
 
-function ResponseLoading() {
+function SettingsPanel({
+  initialProvider,
+  initialScripture,
+  onBack,
+  onSaved,
+  onError,
+}: {
+  initialProvider: ControlStatus["configuration"]["providers"]["ai"];
+  initialScripture: ControlStatus["configuration"]["providers"]["scripture"];
+  onBack: () => void;
+  onSaved: () => Promise<void>;
+  onError: (value: string) => void;
+}) {
+  const [provider, setProvider] = useState<Provider>(initialProvider.provider);
+  const [model, setModel] = useState(initialProvider.model);
+  const [credential, setCredential] = useState("");
+  const [providerIdentity, setProviderIdentity] = useState("");
+  const [scripture, setScripture] = useState(initialScripture.provider);
+  const [bibleId, setBibleId] = useState(initialScripture.bibleId);
+  const [scriptureCredential, setScriptureCredential] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    onError("");
+    try {
+      const key =
+        provider === "openai"
+          ? credential
+            ? { openaiApiKey: credential }
+            : {}
+          : provider === "gemini"
+            ? credential
+              ? { geminiApiKey: credential }
+              : {}
+            : provider === "gloo"
+              ? credential
+                ? {
+                    ...(providerIdentity ? { glooClientId: providerIdentity } : {}),
+                    glooClientSecret: credential,
+                    glooModel: model,
+                  }
+                : {
+                    ...(providerIdentity ? { glooClientId: providerIdentity } : {}),
+                    glooModel: model,
+                  }
+              : credential
+                ? { bonfireApiKey: credential, bonfireModel: model }
+                : { bonfireModel: model };
+      await request("/api/control/providers", {
+        method: "POST",
+        body: JSON.stringify({
+          ai: { provider, model, ...key },
+          scripture: {
+            provider: scripture,
+            bibleId,
+            ...(scriptureCredential ? { youVersionAppKey: scriptureCredential } : {}),
+          },
+        }),
+      });
+      await onSaved();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "Unable to save settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
-    <div className="response-loading" role="status">
-      <div className="loading-orbit">
-        <LoaderCircle className="spin" size={22} />
+    <section className="wizard form-wizard">
+      <p className="eyebrow">Local settings</p>
+      <h1>Threadlight configuration.</h1>
+      <p className="lede">Credentials remain local and are never shown again after saving.</p>
+      <section className="provider-section">
+        <p className="eyebrow">Model provider</p>
+        <div className="provider-row">
+          {(["openai", "gemini", "gloo", "bonfire"] as Provider[]).map((item) => (
+            <button
+              type="button"
+              className={provider === item ? "provider selected" : "provider"}
+              key={item}
+              onClick={() => setProvider(item)}
+            >
+              {item === "gloo"
+                ? "Gloo"
+                : item === "bonfire"
+                  ? "Bonfire"
+                  : item[0]?.toUpperCase() + item.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="field-grid">
+          <Field label="Model">
+            <input value={model} onChange={(event) => setModel(event.target.value)} />
+          </Field>
+          <Field
+            label="Provider credential"
+            hint={
+              initialProvider.configured && provider === initialProvider.provider
+                ? "Saved locally"
+                : undefined
+            }
+          >
+            <input
+              value={credential}
+              onChange={(event) => setCredential(event.target.value)}
+              type="password"
+              placeholder="Paste credential"
+            />
+          </Field>
+          {provider === "gloo" && (
+            <Field label="Gloo client ID">
+              <input
+                value={providerIdentity}
+                onChange={(event) => setProviderIdentity(event.target.value)}
+                placeholder="Client ID"
+              />
+            </Field>
+          )}
+        </div>
+      </section>
+      <section className="provider-section">
+        <p className="eyebrow">Scripture source</p>
+        <div className="provider-row">
+          {(["ao", "youversion"] as const).map((item) => (
+            <button
+              type="button"
+              className={scripture === item ? "provider selected" : "provider"}
+              key={item}
+              onClick={() => setScripture(item)}
+              aria-pressed={scripture === item}
+            >
+              {item === "ao" ? "AO Lab" : "YouVersion"}
+            </button>
+          ))}
+        </div>
+        <Field label="Bible ID">
+          <input value={bibleId} onChange={(event) => setBibleId(event.target.value)} />
+        </Field>
+        {scripture === "youversion" && (
+          <Field
+            label="YouVersion app key"
+            hint={
+              initialScripture.configured && scripture === initialScripture.provider
+                ? "Saved locally"
+                : undefined
+            }
+          >
+            <input
+              value={scriptureCredential}
+              onChange={(event) => setScriptureCredential(event.target.value)}
+              type="password"
+              placeholder="Paste app key"
+            />
+          </Field>
+        )}
+      </section>
+      <div className="form-actions">
+        <button type="button" className="text-button" onClick={onBack}>
+          Back
+        </button>
+        <button type="button" className="primary" disabled={saving} onClick={() => void save()}>
+          {saving ? "Saving..." : "Save settings"}
+        </button>
       </div>
-      <strong>Listening to the room…</strong>
-      <span>Finding a response that fits this moment.</span>
-      <div className="response-skeleton">
-        <i />
-        <i />
-        <i />
-        <i />
+    </section>
+  );
+}
+
+function LiveDashboard({
+  status,
+  onAdd,
+  onOpen,
+  onPause,
+}: {
+  status: ControlStatus;
+  onAdd: () => void;
+  onOpen: (deployment: Deployment) => void;
+  onPause: (id: string) => Promise<void>;
+}) {
+  return (
+    <section className="dashboard">
+      <div className="dashboard-heading">
+        <div>
+          <p className="eyebrow">Local control</p>
+          <h1>Threadlight</h1>
+          <p className="lede">Your deployments stay on this machine.</p>
+        </div>
+        <button className="primary" type="button" onClick={onAdd}>
+          Add destination <ArrowRight size={17} />
+        </button>
       </div>
+      <section className="deployment-list">
+        <div className="list-title">
+          <h2>Destinations</h2>
+          <span>{status.configuration.deployments.length}</span>
+        </div>
+        {status.configuration.deployments.map((deployment) => {
+          const runtime = status.runtime.deployments.find((entry) => entry?.id === deployment.id);
+          const Icon = icons[deployment.kind];
+          return (
+            <article className="deployment-row" key={deployment.id}>
+              <span className="route-icon">
+                <Icon size={21} />
+              </span>
+              <div>
+                <strong>{deployment.name}</strong>
+                <small>
+                  {deployment.kind === "discord"
+                    ? participationModeLabels[deployment.discord?.participationMode ?? "shy"]
+                    : deployment.kind === "youtube-comments" && deployment.youtube
+                      ? youtubeHealth(deployment.youtube)
+                      : descriptions[deployment.kind]}
+                </small>
+                {runtime?.message && <small className="error-copy">{runtime.message}</small>}
+              </div>
+              <span className={`state ${runtime?.ready ? "live" : ""}`}>
+                {runtime?.ready
+                  ? "Live"
+                  : deployment.state === "paused"
+                    ? "Paused"
+                    : deployment.state === "error"
+                      ? "Needs attention"
+                      : "Set up"}
+              </span>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={`Open ${deployment.name}`}
+                onClick={() => onOpen(deployment)}
+              >
+                <ArrowRight size={18} />
+              </button>
+              {deployment.state === "running" && (
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={`Pause ${deployment.name}`}
+                  onClick={() => void onPause(deployment.id)}
+                >
+                  <CirclePause size={18} />
+                </button>
+              )}
+            </article>
+          );
+        })}
+      </section>
+      <div className="dashboard-foot">
+        <LockKeyhole size={15} />
+        Configuration is stored in your local Threadlight volume.
+      </div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactElement<{ id?: string }>;
+}) {
+  const inputId = useId();
+  return (
+    <div className="field">
+      <label htmlFor={inputId}>
+        <strong>{label}</strong>
+        {hint && <small>{hint}</small>}
+      </label>
+      {isValidElement(children) ? cloneElement(children, { id: inputId }) : children}
     </div>
   );
 }
 
-function ResponseError({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="response-error" role="alert">
-      <CircleAlert size={21} />
-      <strong>Threadlight could not reach its providers.</strong>
-      <p>No substitute response was shown.</p>
-      <button className="text-button" type="button" onClick={onRetry}>
-        <RefreshCw size={14} /> Try again
-      </button>
-    </div>
-  );
-}
-
-function EmptyResponse() {
-  return (
-    <div className="empty-response">
-      <Sparkles size={19} />
-      <strong>Threadlight is here when the room needs it.</strong>
-    </div>
-  );
+function omitEmpty<T extends Record<string, string>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry.trim().length > 0),
+  ) as Partial<T>;
 }

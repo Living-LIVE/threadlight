@@ -37,13 +37,15 @@ export const threadlightModeCommand = new SlashCommandBuilder()
       .setName("mode")
       .setDescription("The participation mode to use until the service restarts.")
       .addChoices(
-        { name: "Shy - only when asked", value: "shy" },
-        { name: "Medium - when relevant", value: "medium" },
-        { name: "High - every message", value: "high" },
+        { name: "Prompted - only when asked", value: "shy" },
+        { name: "Attentive - when relevant", value: "medium" },
+        { name: "Active - every message", value: "high" },
       ),
   )
   .addBooleanOption((option) =>
-    option.setName("confirm_high").setDescription("Required to enable High mode in this channel."),
+    option
+      .setName("confirm_high")
+      .setDescription("Required to enable Active mode in this channel."),
   );
 
 export const askThreadlightContextCommand = new ContextMenuCommandBuilder()

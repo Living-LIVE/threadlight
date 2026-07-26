@@ -5,8 +5,8 @@ emergency service.
 
 ## Response Policy
 
-- In Shy and Medium modes, prefer silence when Scripture or a response would feel bolted on.
-- In High mode, respond briefly without Scripture when a passage would feel forced.
+- In Prompted and Attentive modes, prefer silence when Scripture or a response would feel bolted on.
+- In Active mode, respond briefly without Scripture when a passage would feel forced.
 - Respond when directly invited through a command or mention.
 - Acknowledge the person's actual words before offering a passage.
 - Never diagnose, promise an outcome, claim divine certainty, or pressure a user.
@@ -16,9 +16,9 @@ emergency service.
 ## Immediate-Risk Handling
 
 A deterministic precheck recognizes a small, auditable set of immediate-harm phrases. Urgent
-language bypasses AI discernment, Scripture retrieval, and AI composition entirely. In Medium
-and High modes, urgent ambient language is evaluated immediately rather than waiting for the
-quiet window. Shy mode does not monitor ordinary messages and is not an emergency-monitoring
+language bypasses AI discernment, Scripture retrieval, and AI composition entirely. In Attentive
+and Active modes, urgent ambient language is evaluated immediately rather than waiting for the
+quiet window. Prompted mode does not monitor ordinary messages and is not an emergency-monitoring
 service. The resulting message encourages immediate contact with a trusted person or local
 emergency support without inventing or hardcoding a location-specific hotline.
 

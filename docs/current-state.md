@@ -1,0 +1,66 @@
+# Current State
+
+## Product Position
+
+Threadlight is an open-source, self-hosted control surface and Discord-first conversational
+presence. The project is suitable for local development, forks, and demonstration. It is not a
+hosted multi-tenant service.
+
+## Implemented
+
+- A no-login local dashboard that guides a Discord setup one decision at a time.
+- Local JSON configuration with atomic writes and browser-safe, sanitized status responses.
+- One executable Discord destination, with Prompted, Attentive, and Active participation policies.
+- OpenAI plus AO Lab Scripture as the executable provider path.
+- A YouTube Comments connector with Google OAuth callback handling, owned-channel discovery,
+  polling, review drafts, and explicit threaded-reply posting. Real OAuth/comment verification is
+  pending callback registration and a dedicated test video.
+- Docker Compose deployment with loopback-only default binding and a durable configuration volume.
+- A provider-neutral core so channel and provider adapters can be added without coupling them to
+  the dashboard.
+
+## Planned
+
+- Runtime adapters for Gemini, Gloo, Bonfire, and YouVersion.
+- A connector for Slack.
+- Catalog entries for Microsoft Teams and Twitch.
+- A remote deployment guide that includes an operator-authenticated reverse proxy.
+
+Planned items are visible to communicate direction. They are not executable features and should
+not be described as available in demos, issues, or release notes.
+
+## Known Limits
+
+- One Discord deployment and one YouTube Comments deployment may run in one Threadlight process
+  today.
+- Operators must supply their own Discord and provider credentials.
+- Threadlight does not persist Discord conversation history. Pending YouTube review drafts retain
+  bounded comment and reply excerpts in the local configuration volume until resolved.
+- YouTube Comments has not yet completed a live Google OAuth or public-comment canary.
+- Docker binds to loopback by default. Remote exposure requires an authenticated proxy owned by
+  the operator.
+- Docker image builds have been locally verified. The current machine's Docker Desktop runtime
+  smoke is blocked by Docker Desktop client hangs; see the [QA ledger](qa/2026-07-25-local-control-surface-build.md).
+
+## Verification
+
+For a complete local quality gate:
+
+```bash
+pnpm check
+```
+
+For focused local-control regression coverage:
+
+```bash
+pnpm vitest run \
+  apps/server/src/control.test.ts \
+  apps/server/src/runtime-manager.test.ts \
+  apps/web/src/launch-readiness.test.ts
+```
+
+## Next Contributions
+
+Useful contributions should preserve the provider-neutral boundaries in `packages/core`, add
+deterministic tests for changed behavior, and update this document when they change the shipped
+surface. Read [Contributing](../CONTRIBUTING.md) before opening a pull request.

@@ -481,7 +481,7 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
     if (requested === "high" && !interaction.options.getBoolean("confirm_high")) {
       await interaction.reply({
         content:
-          "High mode replies to every eligible human message. Run the command again with `confirm_high: True`.",
+          "Active mode replies to every eligible human message. Run the command again with `confirm_high: True`.",
         ephemeral: true,
         allowedMentions: { parse: [] },
       });

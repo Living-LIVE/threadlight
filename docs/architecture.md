@@ -30,39 +30,40 @@ types never cross into the core contract.
 
 ### Server
 
-`apps/server` owns runtime configuration, the Discord gateway, participation timing,
-per-conversation queues, bounded event deduplication, the public API, rate limiting, static
-delivery, and process lifecycle.
+`apps/server` owns the local configuration store, runtime lifecycle manager, Discord gateway,
+participation timing, per-conversation queues, bounded event deduplication, local control APIs,
+rate limiting, static delivery, and process lifecycle.
 
 ### Deployment
 
 The production build is a single Node.js process and a single Docker image. It contains the
-compiled web application, API, Discord gateway, core orchestration, and provider adapters.
-Startup fails when a selected provider is missing required configuration. A Discord connection
-or command-registration failure leaves the HTTP service available for diagnosis and marks
-readiness unavailable. The process handles `SIGINT` and `SIGTERM`, disconnects Discord, and
-closes the HTTP server before exiting.
+compiled web application, API, Discord gateway, core orchestration, and provider adapters. It
+starts without provider or Discord credentials so the local operator can complete setup. A local
+configuration file is atomically written to a Docker volume with restricted permissions. A
+Discord connection or command-registration failure leaves the HTTP service available for
+diagnosis and marks that deployment as unavailable. The process handles `SIGINT` and `SIGTERM`,
+disconnects Discord, and closes the HTTP server before exiting.
 
-Threadlight is intentionally stateless:
+Threadlight is message-stateless:
 
 - It does not persist Discord messages or demo conversations.
+- Pending YouTube review drafts retain bounded comment and reply excerpts in the local operator
+  configuration volume until the operator resolves them.
 - It fetches only recent context from the configured channel or one of its child threads.
 - Participation timers, mode overrides, queues, and deduplication state reset on restart.
 - It needs no database or queue for the Discord-first release.
-- Container replacement or laptop restart does not require data migration.
+- Container replacement or laptop restart retains only operator configuration in the local volume.
 
 The liveness endpoint reports whether the process can serve requests. The readiness endpoint
-separately reports whether an enabled Discord gateway can access the configured guild and
-channel, exposes the effective participation mode and queue state, provides a sanitized install
-URL when authorization is incomplete, and reports whether competition provider credentials are
-configured.
+retains the legacy environment bootstrap status. `/api/control/status` reports the local route
+catalog, sanitized provider state, deployment state, and runtime health. Control APIs accept
+credentials write-only and never return them to the browser.
 
 ### Web
 
-`apps/web` is a no-login demonstration of the same orchestration path used by Discord. Bundled
-scenarios provide an explicit fixture preview before a request is sent. A successful request
-identifies the live providers in the provenance panel; a failed request shows an error and does
-not substitute fixture output.
+`apps/web` is a no-login local operator surface. It guides one current decision at a time:
+choose a destination, connect it, then choose behavior and launch. After setup it becomes a
+small deployment dashboard. The existing demo APIs remain available as an integration test path.
 
 ## Provider Contracts
 
@@ -78,15 +79,14 @@ translation, attribution, and source metadata.
 
 - Raw message content is not written to application logs.
 - Demo sessions are processed in memory and are not persisted.
-- Shy mode processes Discord context only after an explicit invocation.
-- Medium and High process recent context without an explicit mention. Operators must disclose
+- Prompted mode processes Discord context only after an explicit invocation.
+- Attentive and Active process recent context without an explicit mention. Operators must disclose
   this behavior to participants in the configured channel.
 - Provider keys remain server-side.
 
 ## Operator Boundary
 
-Configuration is supplied through environment variables, normally with `.env.local` and Docker
-Compose. Secrets are never accepted or exposed by the browser UI. The Runtime status drawer
-reports sanitized service, provider, gateway, and channel state. An operator can bind the
-container to a dedicated host, authorize and register commands into one guild, restrict
-operation to one channel, and verify the resulting runtime through the health endpoints.
+Configuration is normally supplied through the local operator UI and persisted in a Docker
+volume. `.env.local` is an optional first-start bootstrap path. The browser submits credentials
+only to local write-only APIs and receives sanitized status. Docker binds the control surface to
+loopback by default; any remote exposure must be protected by an operator-authenticated proxy.
