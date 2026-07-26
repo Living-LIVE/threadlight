@@ -857,6 +857,7 @@ function ConfigureAndLaunch({
     provider,
     alreadyConfigured: providerAlreadyConfigured,
     credential: apiKey,
+    identity: providerIdentity,
   });
   const launch = async () => {
     setSaving(true);
@@ -956,11 +957,11 @@ function ConfigureAndLaunch({
             </button>
           ))}
         </div>
-        {provider !== "openai" && (
+        {provider === "gemini" || provider === "bonfire" ? (
           <p className="status-note">
             This provider can be saved now; its live runtime adapter is still being added.
           </p>
-        )}
+        ) : null}
         <div className="field-grid">
           <Field label="Model">
             <input
