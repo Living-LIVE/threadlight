@@ -22,6 +22,7 @@ reply excerpts locally until the operator resolves them.
 | Discord | Available | One configured Discord destination per Threadlight installation. |
 | OpenAI, Gloo, AO Lab, YouVersion | Available | Gloo and YouVersion credentials are configured locally through Threadlight. |
 | Local setup dashboard | Available | Credentials are stored locally and returned only as configured/not-configured state. |
+| Provider preview | Available | Runs a bounded test response through the saved provider pair without sending to a destination. |
 | Gemini, Bonfire | Configuration-ready | Settings can be saved locally; runtime adapters are not yet included. |
 | YouTube Comments | Available after OAuth setup | Polls eligible comments, prepares review drafts, and supports explicit threaded replies. |
 | Slack | Planned | Visible in the dashboard, not yet selectable. |
@@ -40,6 +41,7 @@ Open [http://localhost:8787](http://localhost:8787), then complete the three-ste
 1. Choose Discord.
 2. Enter the Discord application, bot, server, and channel values.
 3. Choose a participation mode and configure the executable provider.
+4. From the dashboard, run a test response to verify the saved provider pair before enabling a destination.
 
 Compose binds the dashboard to `127.0.0.1` and persists its configuration in the Docker-managed
 `threadlight-config` volume. Put an operator-authenticated reverse proxy in front of Threadlight

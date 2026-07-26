@@ -10,12 +10,14 @@ import {
   type Deployment,
   DestinationCatalog,
   DestinationKindSchema,
+  type LocalControlConfig,
   type LocalControlStore,
   providerConfigured,
   sanitizeConfig,
 } from "./control.js";
 import { getDiscordInstallUrl, type ParticipationStatus } from "./discord/index.js";
 import { competitionReadiness, type ThreadlightConfig } from "./env.js";
+import { createControlRuntime } from "./runtime.js";
 import type { ThreadlightRuntimeManager } from "./runtime-manager.js";
 import { signOAuthState, verifyOAuthState, YouTubeClient } from "./youtube/index.js";
 
@@ -45,6 +47,7 @@ type BuildAppOptions = {
   logger?: boolean;
   controlStore?: LocalControlStore;
   runtimeManager?: ThreadlightRuntimeManager;
+  controlRuntimeFactory?: (config: LocalControlConfig) => ThreadlightOrchestrator;
   runtimeStatus?: () => {
     discord: {
       enabled: boolean;
@@ -81,6 +84,10 @@ const ProviderUpdateSchema = z.object({
 const DeploymentCreateSchema = z.object({
   kind: DestinationKindSchema,
   name: z.string().trim().min(1).max(120).optional(),
+});
+
+const ControlPreviewSchema = z.object({
+  prompt: z.string().trim().min(1).max(2_000),
 });
 
 const DeploymentUpdateSchema = z.object({
@@ -205,6 +212,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const controlStore = options.controlStore;
   const runtimeManager = options.runtimeManager;
   if (controlStore && runtimeManager) {
+    const controlRuntimeFactory = options.controlRuntimeFactory ?? createControlRuntime;
     app.get("/api/control/status", async () => {
       const config = await controlStore.load();
       const runtime = await runtimeManager.status();
@@ -235,6 +243,57 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       }));
       await runtimeManager.reconcile();
       return { ok: true };
+    });
+
+    app.post("/api/control/preview", async (request, reply) => {
+      const parsed = ControlPreviewSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_request", message: "Enter a message for the test response." });
+      }
+      if (!limiter.take(request.ip)) {
+        return reply.code(429).send({
+          error: "rate_limited",
+          message: "Threadlight needs a moment before another test response.",
+        });
+      }
+
+      const config = await controlStore.load();
+      if (
+        !providerConfigured(config.providers.ai) ||
+        !["openai", "gloo"].includes(config.providers.ai.provider) ||
+        !["ao", "youversion"].includes(config.providers.scripture.provider)
+      ) {
+        return reply.code(409).send({
+          error: "provider_unavailable",
+          message: "Save an executable AI and Scripture provider before running a test response.",
+        });
+      }
+
+      try {
+        const result = await controlRuntimeFactory(config).respond({
+          context: {
+            channelId: "control-preview",
+            roomName: "Threadlight preview",
+            messages: [],
+          },
+          prompt: parsed.data.prompt,
+          source: "demo",
+          intent: "reflection",
+          trigger: "explicit",
+        });
+        return { reply: result.reply, decision: result.decision, trace: result.trace };
+      } catch (error) {
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Threadlight control preview failed",
+        );
+        return reply.code(502).send({
+          error: "provider_unavailable",
+          message: "Threadlight could not form a test response right now.",
+        });
+      }
     });
 
     app.post("/api/control/deployments", async (request, reply) => {

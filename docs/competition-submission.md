@@ -39,8 +39,8 @@ The project uses Gloo for values-aligned AI routing and YouVersion or AO Lab for
 Target length: 2 minutes 30 seconds to 3 minutes.
 
 1. Open with the problem: care, reflection, and Scripture are often disconnected from the moment people need them.
-2. Show the Threadlight dashboard, choose Discord, and explain Prompted, Attentive, and Active presence.
-3. Show a Discord interaction and the resulting sourced reply.
+2. Show the Threadlight dashboard, run a test response through the saved Gloo and Scripture pair, and point out the attributed passage and provider trace.
+3. Choose Discord and explain Prompted, Attentive, and Active presence, then show a sourced interaction.
 4. Show YouTube setup: connect the owner Google account and choose a small allowlist of videos.
 5. Show the review queue: a controlled comment produces a draft, with caps and safety suppression before any public post.
 6. Close with the build story: an open-source reference implementation that works inside existing community habits.

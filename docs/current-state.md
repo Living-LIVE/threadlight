@@ -10,6 +10,8 @@ hosted multi-tenant service.
 
 - A no-login local dashboard that guides a Discord setup one decision at a time.
 - Local JSON configuration with atomic writes and browser-safe, sanitized status responses.
+- A bounded provider preview that runs against the saved local AI and Scripture configuration without
+  sending a message to a community destination.
 - One executable Discord destination, with Prompted, Attentive, and Active participation policies.
 - OpenAI or Gloo for AI composition, paired with AO Lab or YouVersion for Scripture retrieval.
 - A YouTube Comments connector with Google OAuth callback handling, owned-channel discovery,

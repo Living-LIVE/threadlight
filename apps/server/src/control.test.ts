@@ -178,4 +178,48 @@ describe("local control configuration", () => {
       await app.close();
     }
   });
+
+  it("runs a preview through the saved local provider configuration", async () => {
+    const store = await createStore();
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: new ThreadlightRuntimeManager(store),
+      controlRuntimeFactory: () =>
+        new DefaultThreadlightOrchestrator({
+          aiProvider: new FixtureAIProvider(),
+          scriptureProvider: new FixtureScriptureProvider(),
+        }),
+      logger: false,
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/control/preview",
+        payload: { prompt: "I feel overwhelmed today. Please offer a brief reflection." },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        reply: { passage: { reference: "Psalm 34:18" } },
+        trace: {
+          aiProvider: "fixture-ai",
+          scriptureProvider: "fixture-scripture",
+        },
+      });
+    } finally {
+      await app.close();
+    }
+  });
 });

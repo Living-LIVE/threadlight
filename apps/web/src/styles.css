@@ -15,7 +15,8 @@ body {
   background: #fcfcfa;
 }
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 button {
@@ -261,6 +262,21 @@ input:focus {
   border-color: #28766e;
   box-shadow: 0 0 0 2px #e7f3ef;
 }
+textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 11px 13px;
+  border: 1px solid #d9ddda;
+  border-radius: 5px;
+  color: #1d2524;
+  background: #fff;
+  resize: vertical;
+}
+textarea:focus {
+  border-color: #28766e;
+  box-shadow: 0 0 0 2px #e7f3ef;
+  outline: none;
+}
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -465,6 +481,69 @@ input:focus {
   margin-top: 30px;
   color: #737d79;
   font-size: 13px;
+}
+.preview-panel {
+  max-width: 700px;
+  margin-top: 52px;
+  padding-top: 24px;
+  border-top: 1px solid #e4e7e4;
+}
+.preview-panel h2 {
+  margin-bottom: 7px;
+}
+.preview-panel > div:first-child > p:last-child {
+  margin-bottom: 22px;
+  color: #737c79;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.preview-field {
+  display: block;
+}
+.preview-field > span {
+  display: block;
+  margin-bottom: 8px;
+  color: #2e3735;
+  font-size: 14px;
+  font-weight: 700;
+}
+.preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.preview-actions .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.preview-panel > .error-copy {
+  margin: 14px 0 0;
+  color: #a45c3e;
+  font-size: 13px;
+}
+.preview-result {
+  margin-top: 22px;
+  padding: 18px 0 0;
+  border-top: 1px solid #e4e7e4;
+}
+.preview-message {
+  margin-bottom: 12px;
+  color: #2e3735;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.preview-passage {
+  margin-bottom: 12px;
+  color: #185f57;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.preview-passage span,
+.preview-result small {
+  color: #737c79;
+  font-weight: 500;
 }
 .notice {
   display: flex;

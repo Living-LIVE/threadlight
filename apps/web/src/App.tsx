@@ -104,6 +104,19 @@ type ControlStatus = {
   };
 };
 
+type ControlPreview = {
+  reply?: {
+    message: string;
+    passage?: {
+      reference: string;
+      translation: string;
+      attribution: string;
+    };
+  };
+  decision: { action: string; reason: string };
+  trace: { aiProvider: string; scriptureProvider: string; totalMs: number };
+};
+
 const icons = {
   discord: MessageCircle,
   slack: MessageCircle,
@@ -1216,6 +1229,31 @@ function LiveDashboard({
   onOpen: (deployment: Deployment) => void;
   onPause: (id: string) => Promise<void>;
 }) {
+  const [prompt, setPrompt] = useState(
+    "I feel overwhelmed today. Could you offer a brief reflection?",
+  );
+  const [preview, setPreview] = useState<ControlPreview>();
+  const [previewError, setPreviewError] = useState<string>();
+  const [previewing, setPreviewing] = useState(false);
+  const runPreview = async () => {
+    setPreviewing(true);
+    setPreviewError(undefined);
+    try {
+      setPreview(
+        await request<ControlPreview>("/api/control/preview", {
+          method: "POST",
+          body: JSON.stringify({ prompt }),
+        }),
+      );
+    } catch (reason) {
+      setPreviewError(
+        reason instanceof Error ? reason.message : "Threadlight could not form a test response.",
+      );
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   return (
     <section className="dashboard">
       <div className="dashboard-heading">
@@ -1282,6 +1320,45 @@ function LiveDashboard({
             </article>
           );
         })}
+      </section>
+      <section className="preview-panel" aria-labelledby="preview-heading">
+        <div>
+          <p className="eyebrow">Provider check</p>
+          <h2 id="preview-heading">Run a test response.</h2>
+          <p>Uses your saved provider settings. No message is sent to a destination.</p>
+        </div>
+        <label className="preview-field">
+          <span>Test message</span>
+          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} />
+        </label>
+        <div className="preview-actions">
+          <button
+            className="text-button"
+            type="button"
+            disabled={previewing || !prompt.trim()}
+            onClick={() => void runPreview()}
+          >
+            <Sparkles size={16} />
+            {previewing ? "Running..." : "Run test response"}
+          </button>
+        </div>
+        {previewError && <p className="error-copy">{previewError}</p>}
+        {preview && (
+          <article className="preview-result">
+            <p className="preview-message">{preview.reply?.message ?? preview.decision.reason}</p>
+            {preview.reply?.passage && (
+              <p className="preview-passage">
+                {preview.reply.passage.reference} · {preview.reply.passage.translation}
+                <br />
+                <span>{preview.reply.passage.attribution}</span>
+              </p>
+            )}
+            <small>
+              {preview.trace.aiProvider} + {preview.trace.scriptureProvider} ·{" "}
+              {preview.trace.totalMs} ms
+            </small>
+          </article>
+        )}
       </section>
       <div className="dashboard-foot">
         <LockKeyhole size={15} />
