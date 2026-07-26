@@ -10,10 +10,10 @@ Prepare Threadlight for competition handoff without submitting it.
 | --- | --- |
 | Local source | Gloo AI and YouVersion Scripture adapters implemented; Google-owned-video setup and scoped polling implemented. |
 | Branch | `codex/build-threadlight`; the GitHub remote branch is the canonical handoff source. |
-| Local verification | `pnpm check` passed: 46 tests across 15 files, lint, typechecks, and production builds. |
+| Local verification | `pnpm check` passed: 47 tests across 15 files, lint, typechecks, and production builds. |
 | Kaggle notebook | Ran the notebook's code path against a fresh local production server using fixture providers: readiness passed and the grief scenario returned a traced, attributed Psalm 34:18 response. |
-| Hosted dashboard | Vercel dashboard is live at `https://threadlight.vercel.app`. |
-| Hosted runtime | Railway control API reports the YouTube OAuth client configured. |
+| Hosted dashboard | Vercel dashboard is live at `https://threadlight.vercel.app`. The current browser build permits Gloo launch only with both its client ID and secret, and no longer presents Gloo as an uninstalled adapter. |
+| Hosted runtime | Railway received the current source deployment and its control API reports the YouTube OAuth client configured. The selected-video allowlist and Review policy persisted across the deployment. |
 | Google OAuth | Railway callback is registered. Account authorization and selected-video test remain pending browser interaction. |
 | Gloo | OAuth token exchange and one bounded completion canary succeeded. |
 | YouVersion | Adapter is implemented and configuration is write-only in the dashboard. The supplied App Key returned `401` from the official API, so live passage retrieval is blocked pending a valid or activated App Key. |
