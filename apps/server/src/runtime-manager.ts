@@ -96,7 +96,10 @@ export class ThreadlightRuntimeManager {
       return;
     }
 
-    if (config.providers.ai.provider !== "openai" || config.providers.scripture.provider !== "ao") {
+    if (
+      !["openai", "gloo"].includes(config.providers.ai.provider) ||
+      !["ao", "youversion"].includes(config.providers.scripture.provider)
+    ) {
       await this.stopGateway();
       this.refreshStatuses(
         config,
@@ -225,7 +228,7 @@ export class ThreadlightRuntimeManager {
     if (!providerConfigured(config.providers.ai) || !deploymentConfigured(active)) return;
     if (
       !["openai", "gloo"].includes(config.providers.ai.provider) ||
-      config.providers.scripture.provider !== "ao"
+      !["ao", "youversion"].includes(config.providers.scripture.provider)
     )
       return;
     if (this.youtube && this.youtubeId === active.id) return;

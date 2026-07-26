@@ -20,9 +20,9 @@ reply excerpts locally until the operator resolves them.
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Discord | Available | One configured Discord destination per Threadlight installation. |
-| OpenAI + AO Lab Scripture | Available | The executable provider path in this release. |
+| OpenAI, Gloo, AO Lab, YouVersion | Available | Gloo and YouVersion credentials are configured locally through Threadlight. |
 | Local setup dashboard | Available | Credentials are stored locally and returned only as configured/not-configured state. |
-| Gemini, Gloo, Bonfire, YouVersion | Configuration-ready | Settings can be saved locally; runtime adapters are not yet included. |
+| Gemini, Bonfire | Configuration-ready | Settings can be saved locally; runtime adapters are not yet included. |
 | YouTube Comments | Available after OAuth setup | Polls eligible comments, prepares review drafts, and supports explicit threaded replies. |
 | Slack | Planned | Visible in the dashboard, not yet selectable. |
 | Microsoft Teams, Twitch | Coming soon | Catalog-only placeholders. |
@@ -144,6 +144,7 @@ Start with the [documentation index](docs/README.md).
 - [Safety model](docs/safety.md)
 - [Discord participation modes](docs/participation-modes.md)
 - [Competition readiness](docs/competition-readiness.md)
+- [Competition submission handoff](docs/competition-submission.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 

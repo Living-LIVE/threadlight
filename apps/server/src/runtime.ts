@@ -5,6 +5,7 @@ import {
   FixtureScriptureProvider,
   GlooProvider,
   OpenAIProvider,
+  YouVersionScriptureProvider,
 } from "@threadlight/providers";
 import type { LocalControlConfig } from "./control.js";
 import type { ThreadlightConfig } from "./env.js";
@@ -34,7 +35,7 @@ export function createControlRuntime(config: LocalControlConfig): ThreadlightOrc
   if (!["openai", "gloo"].includes(config.providers.ai.provider)) {
     throw new Error(`No runtime adapter is installed for ${config.providers.ai.provider}`);
   }
-  if (config.providers.scripture.provider !== "ao") {
+  if (!["ao", "youversion"].includes(config.providers.scripture.provider)) {
     throw new Error(`No runtime adapter is installed for ${config.providers.scripture.provider}`);
   }
 
@@ -52,7 +53,13 @@ export function createControlRuntime(config: LocalControlConfig): ThreadlightOrc
 
   return new DefaultThreadlightOrchestrator({
     aiProvider,
-    scriptureProvider: new AoLabScriptureProvider({ bibleId: config.providers.scripture.bibleId }),
+    scriptureProvider:
+      config.providers.scripture.provider === "youversion"
+        ? new YouVersionScriptureProvider({
+            appKey: required(config.providers.scripture.youVersionAppKey, "YVP_APP_KEY"),
+            bibleId: config.providers.scripture.bibleId,
+          })
+        : new AoLabScriptureProvider({ bibleId: config.providers.scripture.bibleId }),
   });
 }
 
@@ -84,5 +91,11 @@ function createScriptureProvider(config: ThreadlightConfig) {
     return new AoLabScriptureProvider({ bibleId: config.AO_BIBLE_ID });
   }
   if (config.SCRIPTURE_PROVIDER === "fixture") return new FixtureScriptureProvider();
+  if (config.SCRIPTURE_PROVIDER === "youversion") {
+    return new YouVersionScriptureProvider({
+      appKey: required(config.YVP_APP_KEY, "YVP_APP_KEY"),
+      bibleId: config.YVP_BIBLE_ID,
+    });
+  }
   throw new Error(`No runtime adapter is installed for ${config.SCRIPTURE_PROVIDER}`);
 }

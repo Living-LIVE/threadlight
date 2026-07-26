@@ -368,12 +368,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         if (
           !providerConfigured(config.providers.ai) ||
           !["openai", "gloo"].includes(config.providers.ai.provider) ||
-          config.providers.scripture.provider !== "ao"
+          !["ao", "youversion"].includes(config.providers.scripture.provider)
         ) {
           return reply.code(409).send({
             error: "provider_unavailable",
             message:
-              "Configure OpenAI or Gloo with the AO Lab Scripture provider before launching YouTube Comments.",
+              "Configure OpenAI or Gloo with AO Lab or YouVersion Scripture before launching YouTube Comments.",
           });
         }
         await runtimeManager.launch(parsed.data.id);

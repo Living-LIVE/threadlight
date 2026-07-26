@@ -88,6 +88,14 @@ This release supports one YouTube Comments destination per Threadlight installat
 poller, reply quotas, and local operator dashboard unambiguous for a self-hosted single-process
 deployment.
 
+## Provider Configuration
+
+Threadlight supports OpenAI or Gloo for discernment and composition, paired with AO Lab or
+YouVersion for Scripture. YouVersion App Keys are entered through the local configuration surface
+as a write-only value and are sent only to `api.youversion.com` in the `X-YVP-App-Key` header.
+For YouVersion, use a numeric Bible ID such as `3034` for BSB; Threadlight also accepts a Bible
+abbreviation such as `BSB` and resolves it from the app's available translations.
+
 ## Safety And Operating Controls
 
 - Default to Review mode.

@@ -1153,7 +1153,14 @@ function SettingsPanel({
             </button>
           ))}
         </div>
-        <Field label="Bible ID">
+        <Field
+          label="Bible ID"
+          hint={
+            scripture === "youversion"
+              ? "Use 3034 for BSB, or an available abbreviation such as BSB."
+              : undefined
+          }
+        >
           <input value={bibleId} onChange={(event) => setBibleId(event.target.value)} />
         </Field>
         {scripture === "youversion" && (
