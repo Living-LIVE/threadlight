@@ -13,7 +13,13 @@ COPY packages/providers/package.json ./packages/providers/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps ./apps
 COPY packages ./packages
-RUN pnpm build
+# Keep workspace builds explicit and ordered. This avoids BuildKit appearing to
+# hang while pnpm buffers recursive aggregate output, and preserves the package
+# dependency order used by the runtime image below.
+RUN pnpm --filter @threadlight/core build \
+  && pnpm --filter @threadlight/providers build \
+  && pnpm --filter @threadlight/server build \
+  && pnpm --filter @threadlight/web build
 
 FROM node:22-bookworm-slim AS runtime
 

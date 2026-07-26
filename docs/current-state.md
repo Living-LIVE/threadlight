@@ -18,7 +18,8 @@ hosted multi-tenant service.
   polling limited to owner-selected videos, review drafts, and explicit threaded-reply posting.
   The hosted callback is registered, a channel-owner account is connected, and an owner-comment
   safety canary is complete. A non-owner draft-and-approved-reply canary remains.
-- Docker Compose deployment with loopback-only default binding and a durable configuration volume.
+- Docker Compose deployment with loopback-only default binding, a durable configuration volume,
+  and an exact-source image/runtime smoke test.
 - A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
   operator dashboard through `VITE_THREADLIGHT_API_ORIGIN`; it is not a replacement for the
   persistent gateway and poller runtime.
@@ -43,16 +44,16 @@ not be described as available in demos, issues, or release notes.
 - Operators must supply their own Discord and provider credentials.
 - Threadlight does not persist Discord conversation history. Pending YouTube review drafts retain
   bounded comment and reply excerpts in the local configuration volume until resolved.
-- YouTube Comments has completed live Google OAuth and an owner-comment suppression canary. A
-  controlled non-owner comment still needs to produce and approve one review draft before the
-  public-reply path can be called live-verified.
+- YouTube Comments has completed live Google OAuth and an owner-comment suppression canary. The
+  approved non-owner test identity found comments disabled on the inspected owned videos, so a
+  dedicated selected video with comments enabled must produce and approve one review draft before
+  the public-reply path can be called live-verified.
 - The current YouVersion App Key is rejected by the provider, so the implemented YouVersion path
   lacks a live passage-retrieval canary.
 - Docker binds to loopback by default. Remote exposure requires an authenticated proxy owned by
   the operator.
-- Docker Desktop reports a healthy server, but an exact-source `docker compose build` currently
-  stalls after beginning the workspace build. The current smoke evidence and termination boundary
-  are recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
+- The current Docker image passed an exact-source build and isolated container health/control API
+  smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 
 ## Verification
 

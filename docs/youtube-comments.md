@@ -11,7 +11,9 @@ The local dashboard includes a YouTube Comments destination, OAuth connection fl
 client, poller, review queue, and guarded threaded-reply path. The connector is covered by local
 deterministic tests, a hosted Google OAuth connection, and an owner-comment suppression canary.
 The remaining live proof is intentionally narrower: an authorized non-owner comment must produce
-a review draft, and the owner must explicitly approve one controlled threaded reply.
+a review draft, and the owner must explicitly approve one controlled threaded reply. The first
+approved non-owner check found comments disabled on the inspected selected and alternate owned
+videos, so the canary requires a dedicated owned video with comments enabled.
 
 ## Product Intent
 
