@@ -19,12 +19,14 @@ Prepare Threadlight for competition handoff without submitting it.
 | Owner-comment safety canary | A clearly marked owner-authored comment was posted to `We Paint!`, then a manual connector scan completed at `2026-07-26T18:11:29.539Z`. The deployment remained ready with no error, zero drafts, and zero replies. This verifies owner comments do not trigger a draft or reply; it does not prove non-owner draft generation. |
 | Gloo | OAuth token exchange, structured-output handling, and the hosted end-to-end provider preview succeeded. Railway deployment `5a8e4491-b4a1-40b7-adf8-dee1b5dadb7a` is running the current adapter; Vercel serves the preview dashboard at `https://threadlight.vercel.app`. |
 | YouVersion | Adapter is implemented and configuration is write-only in the dashboard. The supplied App Key returned `401` from the official API, so live passage retrieval is blocked pending a valid or activated App Key. |
+| Docker self-hosting | Docker Engine responded, but the exact-source Compose build stalled in the workspace production-build phase. No current image/runtime smoke claim is made; see the [Docker QA ledger](2026-07-26-docker-smoke.md). |
 
 ## Handoff Artifacts
 
 - [Submission handoff](../competition-submission.md)
 - [Competition readiness](../competition-readiness.md)
 - [Competition gallery asset manifest](../competition-assets.md)
+- [Docker smoke QA](2026-07-26-docker-smoke.md)
 - [Local full-suite QA](2026-07-26-full-suite-local.md)
 - [YouTube connector QA](2026-07-26-youtube-comments-connector.md)
 - [Notebook run instructions](../../notebook/README.md)

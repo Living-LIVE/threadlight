@@ -50,8 +50,9 @@ not be described as available in demos, issues, or release notes.
   lacks a live passage-retrieval canary.
 - Docker binds to loopback by default. Remote exposure requires an authenticated proxy owned by
   the operator.
-- Docker image builds have been locally verified. The current machine's Docker Desktop runtime
-  smoke is blocked by Docker Desktop client hangs; see the [QA ledger](qa/2026-07-25-local-control-surface-build.md).
+- Docker Desktop reports a healthy server, but an exact-source `docker compose build` currently
+  stalls after beginning the workspace build. The current smoke evidence and termination boundary
+  are recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 
 ## Verification
 

@@ -14,7 +14,9 @@ This directory is the technical and operational source of truth for Threadlight.
 | [YouTube Comments](youtube-comments.md) | Implemented connector behavior, OAuth setup, safety controls, and test gates. |
 | [Competition readiness](competition-readiness.md) | Hackathon submission requirements and provider readiness. |
 | [Competition submission handoff](competition-submission.md) | Final links, copy, demo script, evidence, and owner checklist. |
-| [QA ledger](qa/2026-07-25-local-control-surface-build.md) | Local control-surface verification evidence and remaining Docker blocker. |
+| [Competition gallery assets](competition-assets.md) | Clean desktop and mobile dashboard captures for the submission gallery. |
+| [Current Docker smoke QA](qa/2026-07-26-docker-smoke.md) | Exact-source self-hosted image/runtime verification status. |
+| [QA ledger](qa/2026-07-25-local-control-surface-build.md) | Historical local control-surface build evidence. |
 | [YouTube Comments QA](qa/2026-07-26-youtube-comments-connector.md) | Local and Railway proof for the YouTube connector. |
 
 ## Maintainer Rules

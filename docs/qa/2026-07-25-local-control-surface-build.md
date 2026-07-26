@@ -1,5 +1,9 @@
 # Threadlight Local Control Surface Build Ledger
 
+> Historical snapshot for the local-control build phase. It predates the Gloo and YouTube Comments
+> implementation. For the current product state, use [Current State](../current-state.md) and the
+> [competition finish ledger](2026-07-26-competition-finish.md).
+
 - Objective: Build the self-hosted configuration wizard and deployment control surface.
 - Repository: `/Users/preston/Code/threadlight`
 - Branch and base: `codex/build-threadlight` at `8881458`

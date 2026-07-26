@@ -2,12 +2,16 @@
 
 ## Status
 
-**Implemented in the current source. A hosted control surface is available; live OAuth and public-comment verification remain pending.**
+**Implemented in the current source. The hosted control surface, Google OAuth callback, owned-channel
+connection, selected-video allowlist, and owner-comment suppression canary are verified. One
+authorized non-owner draft-and-approved-reply canary remains before public threaded replies can be
+described as live-verified.**
 
 The local dashboard includes a YouTube Comments destination, OAuth connection flow, Data API
 client, poller, review queue, and guarded threaded-reply path. The connector is covered by local
-deterministic tests and a synthetic-credential control API canary. It is not yet proven against a
-real Google OAuth consent flow or a public YouTube comment.
+deterministic tests, a hosted Google OAuth connection, and an owner-comment suppression canary.
+The remaining live proof is intentionally narrower: an authorized non-owner comment must produce
+a review draft, and the owner must explicitly approve one controlled threaded reply.
 
 ## Product Intent
 

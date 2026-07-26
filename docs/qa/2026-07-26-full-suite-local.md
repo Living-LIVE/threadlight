@@ -1,5 +1,9 @@
 # Full Suite Local QA - 2026-07-26
 
+> Historical local-suite snapshot at commit `716bc19`. It predates the final Gloo provider path,
+> hosted browser walkthrough, and 50-test full-suite run. See the
+> [competition finish ledger](2026-07-26-competition-finish.md) for current proof.
+
 ## Scope
 
 - Environment: local
