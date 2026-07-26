@@ -5,7 +5,7 @@
 - Repository: `/Users/preston/Code/threadlight`
 - Branch: `codex/build-threadlight`
 - Hosted service: `https://threadlight-production.up.railway.app`
-- Railway deployment: `a80fdc63-2293-4295-9241-b06fab8c2c49`
+- Railway deployment: `e141c4d2-985e-4899-ad58-4cc9e15a6175`
 
 ## Local Proof
 
@@ -50,9 +50,9 @@ the synthetic secret. No Google OAuth exchange or YouTube API request occurred.
 
 ## Hosted Proof
 
-Railway deployment `a80fdc63-2293-4295-9241-b06fab8c2c49` is `SUCCESS` with one running instance.
-It proves the connector deployment checkpoint, but it predates the final local high-touch and
-dashboard-persistence polish; do not treat it as hosted proof of those final changes.
+Railway deployment `e141c4d2-985e-4899-ad58-4cc9e15a6175` is `SUCCESS` with one running instance.
+It contains the final local high-touch, dashboard-persistence, safety, and Vercel-dashboard API
+compatibility changes.
 
 - `GET /api/health` returned `200`.
 - `GET /api/control/status` returned YouTube Comments as `available`.
@@ -69,6 +69,13 @@ available at `https://threadlight.vercel.app` and receives the public
 Vercel hosts only the static operator dashboard. Railway remains the persistent runtime for the
 Discord gateway, YouTube poller, OAuth callback, and control API. Railway `WEB_ORIGIN` is set to
 `https://threadlight.vercel.app` so browser requests and OAuth returns use the deployed dashboard.
+
+Deployment verification passed:
+
+- `https://threadlight.vercel.app` serves the production dashboard bundle.
+- The bundle contains `https://threadlight-production.up.railway.app` as its public API origin.
+- Railway `/api/control/status` returns the expected Railway OAuth callback URL.
+- Railway CORS preflight allows `https://threadlight.vercel.app` for `GET`, `POST`, and `PATCH`.
 
 ## Remaining Live Verification
 
