@@ -60,7 +60,19 @@ describe("GlooProvider", () => {
       tools: [
         {
           type: "function",
-          function: { name: "record_threadlight_discernment" },
+          function: {
+            name: "record_threadlight_discernment",
+            parameters: {
+              properties: {
+                scriptureRequest: {
+                  anyOf: [
+                    expect.anything(),
+                    { properties: { bookId: { enum: expect.arrayContaining(["PSA"]) } } },
+                  ],
+                },
+              },
+            },
+          },
         },
       ],
     });
