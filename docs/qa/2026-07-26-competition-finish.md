@@ -19,7 +19,7 @@ Prepare Threadlight for competition handoff without submitting it.
 | Owner-comment safety canary | A clearly marked owner-authored comment was posted to `We Paint!`, then a manual connector scan completed at `2026-07-26T18:11:29.539Z`. The deployment remained ready with no error, zero drafts, and zero replies. This verifies owner comments do not trigger a draft or reply; it does not prove non-owner draft generation. |
 | Non-owner comment gate | An approved non-owner Google identity opened the selected video and an alternate owned video. Neither exposed YouTube's comment composer, indicating comments are disabled for those targets. No public comment, draft, or automated reply was created. Select a dedicated owned video with comments enabled before the non-owner canary. |
 | Gloo | OAuth token exchange, structured-output handling, and the hosted end-to-end provider preview succeeded. Railway deployment `5a8e4491-b4a1-40b7-adf8-dee1b5dadb7a` is running the current adapter; Vercel serves the preview dashboard at `https://threadlight.vercel.app`. |
-| YouVersion | Adapter is implemented and configuration is write-only in the dashboard. The supplied App Key returned `401` from the official API, so live passage retrieval is blocked pending a valid or activated App Key. |
+| YouVersion | Adapter is implemented and configuration is write-only in the dashboard. After the key owner made the supplied App Key live, the hosted `Run a test response` canary was retried and still failed to form a response. The deployment was immediately restored to AO Lab; a subsequent live Gloo/AO preview returned Matthew 11:28-30 (BSB) in 14.808 seconds. YouVersion live passage retrieval remains unverified pending a working key or provider-side diagnosis. |
 | Docker self-hosting | Exact-source image build and isolated runtime smoke passed. The image built in about 35 seconds, `/api/health` and `/api/control/status` both returned `200`, and the fresh container had no operator credentials or deployments. See the [Docker QA ledger](2026-07-26-docker-smoke.md). |
 
 ## Handoff Artifacts
@@ -36,5 +36,5 @@ Prepare Threadlight for competition handoff without submitting it.
 
 1. In YouTube Studio, enable comments on a dedicated, owner-controlled test video, select it in Threadlight, then add one controlled comment from the authorized non-owner Google identity. Run a scan and verify a Gloo-backed review draft.
 2. Explicitly approve that review draft and verify the one threaded-reply canary.
-3. Provide a valid YouVersion App Key, enter it in the dashboard, and verify one attributed passage retrieval.
+3. Resolve the YouVersion provider failure with its owner, then rerun one attributed-passage canary. AO Lab remains the verified fallback for the live demo.
 4. Publish the Kaggle notebook and demo media, then update the final submission links and media checklist.

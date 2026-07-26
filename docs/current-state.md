@@ -48,8 +48,9 @@ not be described as available in demos, issues, or release notes.
   approved non-owner test identity found comments disabled on the inspected owned videos, so a
   dedicated selected video with comments enabled must produce and approve one review draft before
   the public-reply path can be called live-verified.
-- The current YouVersion App Key is rejected by the provider, so the implemented YouVersion path
-  lacks a live passage-retrieval canary.
+- The YouVersion App Key was retried after its owner made it live, but the hosted provider preview
+  still could not form a response. The running deployment has been restored to the verified AO Lab
+  fallback. The YouVersion adapter therefore still lacks a live passage-retrieval canary.
 - Docker binds to loopback by default. Remote exposure requires an authenticated proxy owned by
   the operator.
 - The current Docker image passed an exact-source build and isolated container health/control API

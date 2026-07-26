@@ -4,8 +4,10 @@ Threadlight can be developed with local provider adapters, but the competition s
 demonstrate the required providers doing real, visible work.
 
 Gloo and YouVersion runtime adapters are implemented. Gloo has completed a bounded live
-credential/completion canary. The current YouVersion App Key returned `401`, so an active App Key
-and a visible attributed-passage canary remain required before submission.
+credential/completion canary. The supplied YouVersion App Key was retried after its owner made it
+live, but the hosted preview still failed; the live configuration was restored to AO Lab, whose
+attributed-passage canary is verified. A working YouVersion key and visible attributed-passage
+canary remain a follow-up before claiming a live YouVersion integration in the submission.
 
 The credential-free reference notebook lives at `notebook/threadlight_demo.ipynb`. It calls the
 same public API used by the web experience and exposes the judged decision, passage attribution,
