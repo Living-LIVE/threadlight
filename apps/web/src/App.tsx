@@ -118,6 +118,8 @@ const descriptions: Record<DestinationKind, string> = {
   twitch: "Support a live chat with thoughtful presence.",
 };
 
+const apiOrigin = (import.meta.env.VITE_THREADLIGHT_API_ORIGIN ?? "").replace(/\/$/, "");
+
 function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
   const pendingDrafts = youtube.drafts.filter((draft) => draft.status === "pending").length;
   const parts = [
@@ -130,7 +132,7 @@ function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(`${apiOrigin}${url}`, {
     ...init,
     headers: { "content-type": "application/json", ...init?.headers },
   });

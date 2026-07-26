@@ -45,6 +45,19 @@ Compose binds the dashboard to `127.0.0.1` and persists its configuration in the
 `threadlight-config` volume. Put an operator-authenticated reverse proxy in front of Threadlight
 before exposing it on a network.
 
+### Hosted Runtime
+
+Threadlight's executable runtime is the single Docker service because Discord and YouTube Comments
+need a long-lived gateway and poller. The current hosted checkpoint is Railway. Vercel is not a
+drop-in replacement for that process: a Vercel-hosted dashboard would need a separately configured
+API origin pointing at the persistent Threadlight service, and it would not host the gateway or
+poller itself.
+
+The included `vercel.json` builds `apps/web` as that optional dashboard. Set
+`VITE_THREADLIGHT_API_ORIGIN` to the HTTPS Railway or self-hosted service URL before deploying it,
+then set the runtime's `WEB_ORIGIN` to the Vercel deployment URL so browser requests and OAuth
+returns use the same operator surface.
+
 ### Local Development
 
 Requirements: Node.js 22+ and pnpm 10.32.1. Corepack is included with Node.js.

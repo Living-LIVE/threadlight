@@ -59,6 +59,14 @@ dashboard-persistence polish; do not treat it as hosted proof of those final cha
 - No AI provider credential, YouTube OAuth credential, deployment, channel, draft, poll, or reply
   is configured in the hosted service.
 
+## Vercel Discovery
+
+On 2026-07-26, the repository had no `.vercel` link or `vercel.json`. The authenticated personal
+Vercel scope had no projects or deployments, and no accessible project was identified as
+Threadlight. No Vercel project was created or changed. A future Vercel UI deployment needs an
+explicit project target and an API-origin configuration for the Railway or self-hosted runtime; it
+cannot host the persistent Discord gateway or YouTube poller.
+
 ## Remaining Live Verification
 
 The Google OAuth web client must register these callback URIs before a real account connection:

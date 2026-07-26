@@ -16,6 +16,9 @@ hosted multi-tenant service.
   polling, review drafts, and explicit threaded-reply posting. Real OAuth/comment verification is
   pending callback registration and a dedicated test video.
 - Docker Compose deployment with loopback-only default binding and a durable configuration volume.
+- A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
+  operator dashboard through `VITE_THREADLIGHT_API_ORIGIN`; it is not a replacement for the
+  persistent gateway and poller runtime.
 - A provider-neutral core so channel and provider adapters can be added without coupling them to
   the dashboard.
 
@@ -25,6 +28,7 @@ hosted multi-tenant service.
 - A connector for Slack.
 - Catalog entries for Microsoft Teams and Twitch.
 - A remote deployment guide that includes an operator-authenticated reverse proxy.
+- An optional static Vercel operator UI deployment with an explicit API-origin configuration.
 
 Planned items are visible to communicate direction. They are not executable features and should
 not be described as available in demos, issues, or release notes.

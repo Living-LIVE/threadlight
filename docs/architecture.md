@@ -59,6 +59,15 @@ retains the legacy environment bootstrap status. `/api/control/status` reports t
 catalog, sanitized provider state, deployment state, and runtime health. Control APIs accept
 credentials write-only and never return them to the browser.
 
+### Hosted Topology
+
+Threadlight's deployed runtime remains the Dockerized Node process because the Discord gateway and
+YouTube poller require a long-lived connection and scheduled work. Railway is the current hosted
+runtime checkpoint. A Vercel deployment can only be a separately configured static/operator UI;
+it must use an explicit API origin for the persistent Threadlight service and cannot replace the
+gateway or poller process. `VITE_THREADLIGHT_API_ORIGIN` configures the Vercel UI, while the
+runtime's `WEB_ORIGIN` must be the Vercel URL for CORS and OAuth redirects.
+
 ### Web
 
 `apps/web` is a no-login local operator surface. It guides one current decision at a time:
