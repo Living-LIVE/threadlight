@@ -136,7 +136,10 @@ function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiOrigin}${url}`, {
     ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
+    headers: {
+      ...(init?.body === undefined ? {} : { "content-type": "application/json" }),
+      ...init?.headers,
+    },
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => undefined)) as { message?: string } | undefined;
