@@ -16,14 +16,13 @@ describe("GlooProvider", () => {
                     function: {
                       arguments: JSON.stringify({
                         action: "respond",
-                        riskLevel: "normal",
+                        riskLevel: "low",
                         reason: "A brief response would help.",
                         pastoralIntent: "Offer steady encouragement.",
                         scriptureRequest: {
-                          bookId: "PSA",
+                          book: "PSA",
                           chapter: 34,
                           verseStart: 18,
-                          verseEnd: null,
                           reference: "Psalm 34:18",
                         },
                       }),
@@ -64,6 +63,53 @@ describe("GlooProvider", () => {
           function: { name: "record_threadlight_discernment" },
         },
       ],
+    });
+  });
+
+  it("fills omitted nullable reply fields from a structured tool call", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({ message: "You are not alone in this." }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+
+    await expect(
+      provider.compose({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "explicit",
+        decision: {
+          action: "respond",
+          riskLevel: "normal",
+          reason: "A brief response would help.",
+          pastoralIntent: "Offer steady encouragement.",
+          scriptureRequest: null,
+        },
+      }),
+    ).resolves.toEqual({
+      message: "You are not alone in this.",
+      prayerPrompt: null,
+      carePrompt: null,
     });
   });
 });

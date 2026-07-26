@@ -114,7 +114,7 @@ export class GlooProvider implements AIProvider {
       500,
       DISCERNMENT_FUNCTION,
     );
-    return DiscernmentDecisionSchema.parse(parseJson(content));
+    return DiscernmentDecisionSchema.parse(normalizeDiscernment(parseJson(content)));
   }
 
   async compose(input: ComposeReplyInput) {
@@ -136,7 +136,7 @@ export class GlooProvider implements AIProvider {
       700,
       COMPOSITION_FUNCTION,
     );
-    return ComposedReplySchema.parse(parseJson(content));
+    return ComposedReplySchema.parse(normalizeReply(parseJson(content)));
   }
 
   private async complete(
@@ -217,4 +217,43 @@ function parseJson(content: string): unknown {
     if (!object) throw new SyntaxError("Gloo returned malformed structured output.");
     return JSON.parse(object);
   }
+}
+
+function normalizeDiscernment(value: unknown): unknown {
+  const decision = record(value);
+  if (!decision) return value;
+  const scriptureRequest = record(decision.scriptureRequest);
+  const riskLevel =
+    decision.riskLevel === "low"
+      ? "normal"
+      : decision.riskLevel === "medium" || decision.riskLevel === "high"
+        ? "sensitive"
+        : decision.riskLevel;
+  return {
+    ...decision,
+    riskLevel,
+    scriptureRequest: scriptureRequest
+      ? {
+          ...scriptureRequest,
+          bookId: scriptureRequest.bookId ?? scriptureRequest.book,
+          verseEnd: scriptureRequest.verseEnd ?? null,
+        }
+      : decision.scriptureRequest,
+  };
+}
+
+function normalizeReply(value: unknown): unknown {
+  const reply = record(value);
+  if (!reply) return value;
+  return {
+    ...reply,
+    prayerPrompt: reply.prayerPrompt ?? null,
+    carePrompt: reply.carePrompt ?? null,
+  };
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
