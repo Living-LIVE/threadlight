@@ -9,7 +9,7 @@ Prepare Threadlight for competition handoff without submitting it.
 | Surface | State |
 | --- | --- |
 | Local source | Gloo AI and YouVersion Scripture adapters implemented; Google-owned-video setup and scoped polling implemented. |
-| Branch | `codex/build-threadlight`; latest pushed commit: `838c84f`. |
+| Branch | `codex/build-threadlight`; the GitHub remote branch is the canonical handoff source. |
 | Local verification | `pnpm check` passed: 46 tests across 15 files, lint, typechecks, and production builds. |
 | Kaggle notebook | Ran the notebook's code path against a fresh local production server using fixture providers: readiness passed and the grief scenario returned a traced, attributed Psalm 34:18 response. |
 | Hosted dashboard | Vercel dashboard is live at `https://threadlight.vercel.app`. |
