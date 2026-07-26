@@ -3,6 +3,10 @@
 Threadlight can be developed with local provider adapters, but the competition submission must
 demonstrate the required providers doing real, visible work.
 
+Gloo and YouVersion runtime adapters are implemented. Gloo has completed a bounded live
+credential/completion canary. The current YouVersion App Key returned `401`, so an active App Key
+and a visible attributed-passage canary remain required before submission.
+
 The credential-free reference notebook lives at `notebook/threadlight_demo.ipynb`. It calls the
 same public API used by the web experience and exposes the judged decision, passage attribution,
 provider trace, and safety stages without embedding secrets.
@@ -23,3 +27,6 @@ Submission readiness also requires:
 - A public Kaggle notebook.
 - A public YouTube demonstration of three minutes or less.
 - A cover image, media gallery, and final writeup of no more than 500 words.
+
+Use the [competition submission handoff](competition-submission.md) as the final owner checklist,
+demo script, and artifact manifest.

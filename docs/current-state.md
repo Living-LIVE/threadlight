@@ -11,10 +11,10 @@ hosted multi-tenant service.
 - A no-login local dashboard that guides a Discord setup one decision at a time.
 - Local JSON configuration with atomic writes and browser-safe, sanitized status responses.
 - One executable Discord destination, with Prompted, Attentive, and Active participation policies.
-- OpenAI plus AO Lab Scripture as the executable provider path.
+- OpenAI or Gloo for AI composition, paired with AO Lab or YouVersion for Scripture retrieval.
 - A YouTube Comments connector with Google OAuth callback handling, owned-channel discovery,
-  polling, review drafts, and explicit threaded-reply posting. Real OAuth/comment verification is
-  pending callback registration and a dedicated test video.
+  polling limited to owner-selected videos, review drafts, and explicit threaded-reply posting.
+  The hosted callback is registered; account authorization and a dedicated test-video canary remain.
 - Docker Compose deployment with loopback-only default binding and a durable configuration volume.
 - A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
   operator dashboard through `VITE_THREADLIGHT_API_ORIGIN`; it is not a replacement for the
@@ -24,7 +24,7 @@ hosted multi-tenant service.
 
 ## Planned
 
-- Runtime adapters for Gemini, Gloo, Bonfire, and YouVersion.
+- Runtime adapters for Gemini and Bonfire.
 - A connector for Slack.
 - Catalog entries for Microsoft Teams and Twitch.
 - A remote deployment guide that includes an operator-authenticated reverse proxy.
@@ -41,6 +41,8 @@ not be described as available in demos, issues, or release notes.
 - Threadlight does not persist Discord conversation history. Pending YouTube review drafts retain
   bounded comment and reply excerpts in the local configuration volume until resolved.
 - YouTube Comments has not yet completed a live Google OAuth or public-comment canary.
+- The current YouVersion App Key is rejected by the provider, so the implemented YouVersion path
+  lacks a live passage-retrieval canary.
 - Docker binds to loopback by default. Remote exposure requires an authenticated proxy owned by
   the operator.
 - Docker image builds have been locally verified. The current machine's Docker Desktop runtime
