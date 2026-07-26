@@ -59,13 +59,16 @@ dashboard-persistence polish; do not treat it as hosted proof of those final cha
 - No AI provider credential, YouTube OAuth credential, deployment, channel, draft, poll, or reply
   is configured in the hosted service.
 
-## Vercel Discovery
+## Vercel Dashboard Deployment
 
-On 2026-07-26, the repository had no `.vercel` link or `vercel.json`. The authenticated personal
-Vercel scope had no projects or deployments, and no accessible project was identified as
-Threadlight. No Vercel project was created or changed. A future Vercel UI deployment needs an
-explicit project target and an API-origin configuration for the Railway or self-hosted runtime; it
-cannot host the persistent Discord gateway or YouTube poller.
+On 2026-07-26, the `threadlight` Vercel project was created under
+`eric-andstudios-projects` using the same authenticated team context as Bonfire. Production is
+available at `https://threadlight.vercel.app` and receives the public
+`VITE_THREADLIGHT_API_ORIGIN=https://threadlight-production.up.railway.app` build setting.
+
+Vercel hosts only the static operator dashboard. Railway remains the persistent runtime for the
+Discord gateway, YouTube poller, OAuth callback, and control API. Railway `WEB_ORIGIN` is set to
+`https://threadlight.vercel.app` so browser requests and OAuth returns use the deployed dashboard.
 
 ## Remaining Live Verification
 
