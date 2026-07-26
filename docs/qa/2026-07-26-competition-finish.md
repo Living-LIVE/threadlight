@@ -11,7 +11,7 @@ Prepare Threadlight for competition handoff without submitting it.
 | Local source | Gloo AI and YouVersion Scripture adapters implemented; Google-owned-video setup and scoped polling implemented. |
 | Branch | `codex/build-threadlight`; the GitHub remote branch is the canonical handoff source. |
 | Local verification | `pnpm check` passed after the Docker and evidence updates: 50 tests across 16 files, lint, typechecks, and production builds. |
-| Kaggle notebook | Ran the notebook's code path against a fresh local production server using fixture providers: readiness passed and the grief scenario returned a traced, attributed Psalm 34:18 response. |
+| Kaggle notebook | Executed the exact notebook code cells against a fresh isolated local fixture server: readiness passed and the grief scenario returned a traced, attributed Psalm 34:18 response. No credentials or live provider calls were used. |
 | Hosted dashboard | Vercel dashboard is live at `https://threadlight.vercel.app`. The current browser build permits Gloo launch only with both its client ID and secret, uses `auto` routing when Gloo is selected, and no longer presents Gloo as an uninstalled adapter. |
 | Hosted runtime | Railway control API reports Gloo `auto` configured, AO Lab Scripture configured, and the selected YouTube deployment running and ready with the Review policy. |
 | Hosted provider preview | The `Run a test response` dashboard action completed against the saved Railway configuration. The Gloo/AO canary returned `respond`, attributed Matthew 11:28-30 (BSB, AO Lab), and a trace showing completed safety, discernment, Scripture retrieval, composition, and response-safety stages in 13.787 seconds. |
