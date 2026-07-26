@@ -113,6 +113,17 @@ const DeploymentUpdateSchema = z.object({
       clientId: z.string().trim().min(1).max(300).optional(),
       clientSecret: z.string().trim().min(1).max(800).optional(),
       refreshToken: z.string().trim().min(1).max(800).optional(),
+      selectedVideos: z
+        .array(
+          z.object({
+            id: z.string().trim().min(1).max(160),
+            title: z.string().trim().min(1).max(200),
+            thumbnailUrl: z.string().url().max(1_000).optional(),
+          }),
+        )
+        .min(1)
+        .max(10)
+        .optional(),
       replyMode: z.enum(["review", "selective", "high-touch"]).optional(),
       pollSeconds: z.number().int().min(60).max(3_600).optional(),
       dailyReplyLimit: z.number().int().min(1).max(100).optional(),
@@ -200,6 +211,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return {
         catalog: DestinationCatalog,
         youtubeCallbackUrl: youtubeCallbackUrl(options.config),
+        youtubeOAuthConfigured: Boolean(
+          options.config.YOUTUBE_OAUTH_CLIENT_ID && options.config.YOUTUBE_OAUTH_CLIENT_SECRET,
+        ),
         configuration: sanitizeConfig(config),
         runtime,
       };
@@ -281,6 +295,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         ...(parsed.data.kind === "youtube-comments"
           ? {
               youtube: {
+                clientId: options.config.YOUTUBE_OAUTH_CLIENT_ID,
+                clientSecret: options.config.YOUTUBE_OAUTH_CLIENT_SECRET,
+                selectedVideos: [],
                 replyMode: "review",
                 pollSeconds: 180,
                 dailyReplyLimit: 12,
@@ -350,13 +367,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         }
         if (
           !providerConfigured(config.providers.ai) ||
-          config.providers.ai.provider !== "openai" ||
+          !["openai", "gloo"].includes(config.providers.ai.provider) ||
           config.providers.scripture.provider !== "ao"
         ) {
           return reply.code(409).send({
             error: "provider_unavailable",
             message:
-              "Configure the OpenAI and AO Lab provider path before launching YouTube Comments.",
+              "Configure OpenAI or Gloo with the AO Lab Scripture provider before launching YouTube Comments.",
           });
         }
         await runtimeManager.launch(parsed.data.id);
@@ -390,10 +407,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         (entry) => entry.id === parsed.data.deploymentId && entry.kind === "youtube-comments",
       );
       const settings = deployment?.youtube;
-      if (!settings?.clientId || !settings.clientSecret) {
+      const oauth = youtubeOAuthConfig(options.config, settings);
+      if (!oauth) {
         return reply.code(409).send({
           error: "configuration_incomplete",
-          message: "Save the YouTube OAuth client ID and secret before connecting.",
+          message: "YouTube sign-in is not configured on this Threadlight server.",
         });
       }
       const youtubeDeploymentId = deployment?.id;
@@ -401,11 +419,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return {
         authorizationUrl: youtube.authorizationUrl(
           {
-            clientId: settings.clientId,
-            clientSecret: settings.clientSecret,
-            redirectUri: youtubeCallbackUrl(options.config),
+            ...oauth,
           },
-          signOAuthState(youtubeDeploymentId, settings.clientSecret),
+          signOAuthState(youtubeDeploymentId, oauth.clientSecret),
         ),
       };
     });
@@ -426,11 +442,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         (entry) => entry.id === candidateId && entry.kind === "youtube-comments",
       );
       const settings = deployment?.youtube;
-      if (
-        !settings?.clientId ||
-        !settings.clientSecret ||
-        !verifyOAuthState(parsed.data.state, settings.clientSecret)
-      ) {
+      const oauth = youtubeOAuthConfig(options.config, settings);
+      if (!settings || !oauth || !verifyOAuthState(parsed.data.state, oauth.clientSecret)) {
         return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
       }
       const youtubeDeploymentId = deployment?.id;
@@ -438,11 +451,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
       }
       try {
-        const oauth = {
-          clientId: settings.clientId,
-          clientSecret: settings.clientSecret,
-          redirectUri: youtubeCallbackUrl(options.config),
-        };
         const token = await youtube.exchangeCode(oauth, parsed.data.code);
         const channel = await youtube.ownedChannel(token.accessToken);
         await controlStore.update((config) => ({
@@ -453,6 +461,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
                   ...entry,
                   youtube: {
                     ...entry.youtube,
+                    clientId: oauth.clientId,
+                    clientSecret: oauth.clientSecret,
                     channelId: channel.id,
                     channelName: channel.name,
                     refreshToken: token.refreshToken ?? entry.youtube.refreshToken,
@@ -465,6 +475,32 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connected`);
       } catch {
         return reply.redirect(`${options.config.WEB_ORIGIN}/?youtube=connection-failed`);
+      }
+    });
+
+    app.get("/api/control/deployments/:id/youtube/videos", async (request, reply) => {
+      const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      const deployment = (await controlStore.load()).deployments.find(
+        (entry) => entry.id === parsed.data.id && entry.kind === "youtube-comments",
+      );
+      const settings = deployment?.youtube;
+      const oauth = youtubeOAuthConfig(options.config, settings);
+      if (!settings?.refreshToken || !oauth) {
+        return reply.code(409).send({
+          error: "youtube_not_connected",
+          message: "Connect a YouTube account before choosing videos.",
+        });
+      }
+      try {
+        const token = await youtube.refresh(oauth, settings.refreshToken);
+        return { videos: await youtube.ownedVideos(token.accessToken) };
+      } catch (error) {
+        return reply.code(409).send({
+          error: "youtube_videos_failed",
+          message:
+            error instanceof Error ? error.message : "Threadlight could not list YouTube videos.",
+        });
       }
     });
 
@@ -601,8 +637,19 @@ function deploymentConfiguredForLaunch(deployment: Deployment) {
     deployment.youtube?.channelId &&
       deployment.youtube.clientId &&
       deployment.youtube.clientSecret &&
-      deployment.youtube.refreshToken,
+      deployment.youtube.refreshToken &&
+      deployment.youtube.selectedVideos.length > 0,
   );
+}
+
+function youtubeOAuthConfig(
+  config: ThreadlightConfig,
+  settings: Deployment["youtube"] | undefined,
+) {
+  const clientId = config.YOUTUBE_OAUTH_CLIENT_ID ?? settings?.clientId;
+  const clientSecret = config.YOUTUBE_OAUTH_CLIENT_SECRET ?? settings?.clientSecret;
+  if (!clientId || !clientSecret) return undefined;
+  return { clientId, clientSecret, redirectUri: youtubeCallbackUrl(config) };
 }
 
 function youtubeCallbackUrl(config: ThreadlightConfig) {

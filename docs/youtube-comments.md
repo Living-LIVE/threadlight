@@ -27,14 +27,22 @@ before it is posted. The implemented policies are:
 Unattended replies to every comment are out of scope. They create public moderation, theological,
 and quota risk without an appropriate operator review path.
 
-## Required Operator Setup
+## Installation Setup
 
-Before implementation can be tested against an owned channel, the operator needs:
+Before a channel owner connects their account, the Threadlight installation needs:
 
 1. A Google Cloud project with YouTube Data API v3 enabled.
 2. A Google OAuth web client with an approved consent screen.
 3. Authorized redirect URIs for each environment that will run the connector.
-4. A dedicated test video with comments enabled.
+
+The OAuth web client credentials belong in the server environment:
+
+```text
+YOUTUBE_OAUTH_CLIENT_ID=...
+YOUTUBE_OAUTH_CLIENT_SECRET=...
+```
+
+They are not dashboard fields and are never exposed to the browser.
 
 The callback paths are:
 
@@ -46,6 +54,16 @@ https://threadlight-production.up.railway.app/api/oauth/youtube/callback
 The public Railway domain is a deployed Threadlight control surface. Operators must add only the
 environments they control to the Google OAuth client and must never place OAuth secrets in
 committed configuration files.
+
+## Channel Owner Flow
+
+1. Select **YouTube Comments** in Threadlight.
+2. Select **Connect Google account** and sign in with the Google account that owns the channel.
+3. Choose up to ten videos Threadlight should watch.
+4. Configure the reply policy and model, then launch.
+
+Threadlight persists the selected-video allowlist locally and polls only those videos. It does not
+watch every video on the connected channel.
 
 ## Intended Runtime Flow
 
@@ -90,8 +108,8 @@ The feature is ready for a controlled live test when all of these are present:
 
 1. The local and Railway callback URIs are registered in the Google OAuth client.
 2. A channel owner completes OAuth and Threadlight discovers the owned channel.
-3. A dedicated test video has comments enabled.
-4. A controlled read-only poll finds a test comment.
+3. The owner selects a dedicated test video with comments enabled.
+4. A controlled read-only poll finds a test comment on that selected video.
 5. A review draft is approved for one explicit `comments.insert` canary.
 
 No production-channel comment should be posted as a test. Use a controlled test video and explicit

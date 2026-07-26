@@ -23,9 +23,9 @@ export function resolveStartupRoute(
   );
   if (youtubeResult === "connected" && connectedYouTube) {
     return {
-      screen: "launch",
+      screen: "connect",
       selectedId: connectedYouTube.id,
-      notice: `YouTube connected to ${connectedYouTube.youtube?.channelId}. Choose Threadlight's model to finish setup.`,
+      notice: "YouTube is connected. Choose the videos Threadlight should watch.",
     };
   }
   if (youtubeResult === "connection-failed") {

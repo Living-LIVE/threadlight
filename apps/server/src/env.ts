@@ -39,6 +39,9 @@ const ConfigSchema = z.object({
   GLOO_MODEL: z.string().optional(),
   YVP_APP_KEY: z.string().optional(),
   YVP_BIBLE_ID: z.string().optional(),
+  // These belong to the Threadlight installation, not to an individual channel owner.
+  YOUTUBE_OAUTH_CLIENT_ID: z.string().optional(),
+  YOUTUBE_OAUTH_CLIENT_SECRET: z.string().optional(),
 });
 
 export type ThreadlightConfig = z.infer<typeof ConfigSchema>;

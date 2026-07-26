@@ -54,6 +54,7 @@ type Deployment = {
   youtube?: {
     channelId?: string;
     channelName?: string;
+    selectedVideos: Array<{ id: string; title: string; thumbnailUrl?: string }>;
     clientIdConfigured: boolean;
     clientSecretConfigured: boolean;
     refreshTokenConfigured: boolean;
@@ -77,6 +78,7 @@ type Deployment = {
 
 type ControlStatus = {
   youtubeCallbackUrl: string;
+  youtubeOAuthConfigured: boolean;
   catalog: Array<{
     kind: DestinationKind;
     label: string;
@@ -228,7 +230,7 @@ export function App() {
       {screen === "connect" && selected && (
         <ConnectDestination
           deployment={selected}
-          youtubeCallbackUrl={status.youtubeCallbackUrl}
+          youtubeOAuthConfigured={status.youtubeOAuthConfigured}
           onBack={() => setScreen("choose")}
           onContinue={() => setScreen("launch")}
           onSaved={refresh}
@@ -384,14 +386,14 @@ function ChooseDestination({
 
 function ConnectDestination({
   deployment,
-  youtubeCallbackUrl,
+  youtubeOAuthConfigured,
   onBack,
   onContinue,
   onSaved,
   onError,
 }: {
   deployment: Deployment;
-  youtubeCallbackUrl: string;
+  youtubeOAuthConfigured: boolean;
   onBack: () => void;
   onContinue: () => void;
   onSaved: () => Promise<unknown>;
@@ -401,7 +403,7 @@ function ConnectDestination({
     return (
       <YouTubeConnection
         deployment={deployment}
-        youtubeCallbackUrl={youtubeCallbackUrl}
+        youtubeOAuthConfigured={youtubeOAuthConfigured}
         onBack={onBack}
         onContinue={onContinue}
         onSaved={onSaved}
@@ -528,35 +530,72 @@ function DiscordConnection({
 
 function YouTubeConnection({
   deployment,
-  youtubeCallbackUrl,
+  youtubeOAuthConfigured,
   onBack,
   onContinue,
   onSaved,
   onError,
 }: {
   deployment: Deployment;
-  youtubeCallbackUrl: string;
+  youtubeOAuthConfigured: boolean;
   onBack: () => void;
   onContinue: () => void;
   onSaved: () => Promise<unknown>;
   onError: (value: string) => void;
 }) {
   const saved = deployment.youtube;
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
   const [replyMode, setReplyMode] = useState(saved?.replyMode ?? "review");
   const [pollSeconds, setPollSeconds] = useState(String(saved?.pollSeconds ?? 180));
   const [dailyReplyLimit, setDailyReplyLimit] = useState(String(saved?.dailyReplyLimit ?? 12));
+  const [videos, setVideos] = useState<Array<{ id: string; title: string; thumbnailUrl?: string }>>(
+    [],
+  );
+  const [selectedVideoIds, setSelectedVideoIds] = useState(
+    () => new Set(saved?.selectedVideos.map((video) => video.id) ?? []),
+  );
+  const [videosLoading, setVideosLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const connected = Boolean(saved?.channelId && saved?.refreshTokenConfigured);
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    setVideosLoading(true);
+    void request<{ videos: Array<{ id: string; title: string; thumbnailUrl?: string }> }>(
+      `/api/control/deployments/${deployment.id}/youtube/videos`,
+    )
+      .then((result) => {
+        if (!cancelled) setVideos(result.videos);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled)
+          onError(
+            reason instanceof Error ? reason.message : "Threadlight could not load your videos.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setVideosLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, deployment.id, onError]);
   const save = async () => {
+    const available = new Map(
+      [...videos, ...(saved?.selectedVideos ?? [])].map((video) => [video.id, video]),
+    );
+    const selectedVideos = [...selectedVideoIds]
+      .map((id) => available.get(id))
+      .filter((video): video is { id: string; title: string; thumbnailUrl?: string } =>
+        Boolean(video),
+      );
     await request(`/api/control/deployments/${deployment.id}`, {
       method: "PATCH",
       body: JSON.stringify({
         youtube: {
-          ...omitEmpty({ clientId, clientSecret }),
           replyMode,
           pollSeconds: Number(pollSeconds),
           dailyReplyLimit: Number(dailyReplyLimit),
+          ...(selectedVideos.length ? { selectedVideos } : {}),
         },
       }),
     });
@@ -566,7 +605,6 @@ function YouTubeConnection({
     setBusy(true);
     onError("");
     try {
-      await save();
       const { authorizationUrl } = await request<{ authorizationUrl: string }>(
         `/api/oauth/youtube/start?deploymentId=${deployment.id}`,
       );
@@ -587,7 +625,6 @@ function YouTubeConnection({
       setBusy(false);
     }
   };
-  const connected = Boolean(saved?.channelId && saved?.refreshTokenConfigured);
   return (
     <section className="wizard form-wizard">
       <p className="step">YouTube Comments</p>
@@ -596,37 +633,15 @@ function YouTubeConnection({
       <p className="lede">Comments become drafts by default. You choose what gets posted.</p>
       {!connected ? (
         <>
-          <details className="setup-note">
-            <summary>Before you connect</summary>
-            <p>
-              In Google Cloud, enable YouTube Data API v3 and add this authorized redirect URI to
-              your Web OAuth client:
+          <p className="helper">
+            <ExternalLink size={14} /> Sign in with the Google account that owns the YouTube
+            channel.
+          </p>
+          {!youtubeOAuthConfigured && (
+            <p className="error-copy">
+              YouTube sign-in has not been configured for this Threadlight installation.
             </p>
-            <code>{youtubeCallbackUrl}</code>
-          </details>
-          <Field
-            label="OAuth client ID"
-            hint={saved?.clientIdConfigured ? "Saved locally" : "From Google Cloud"}
-          >
-            <input
-              value={clientId}
-              onChange={(event) => setClientId(event.target.value)}
-              placeholder={saved?.clientIdConfigured ? "Already configured" : "Paste client ID"}
-            />
-          </Field>
-          <Field
-            label="OAuth client secret"
-            hint={saved?.clientSecretConfigured ? "Saved locally" : "From Google Cloud"}
-          >
-            <input
-              type="password"
-              value={clientSecret}
-              onChange={(event) => setClientSecret(event.target.value)}
-              placeholder={
-                saved?.clientSecretConfigured ? "Already configured" : "Paste client secret"
-              }
-            />
-          </Field>
+          )}
           <div className="form-actions">
             <button type="button" className="text-button" onClick={onBack}>
               Back
@@ -635,9 +650,9 @@ function YouTubeConnection({
               type="button"
               className="primary"
               onClick={() => void connect()}
-              disabled={busy}
+              disabled={busy || !youtubeOAuthConfigured}
             >
-              {busy ? "Connecting..." : "Connect YouTube"}
+              {busy ? "Opening Google..." : "Connect Google account"}
             </button>
           </div>
         </>
@@ -646,6 +661,38 @@ function YouTubeConnection({
           <p className="helper">
             <ExternalLink size={14} /> Connected to {saved?.channelName ?? "your YouTube channel"}
           </p>
+          <Field
+            label="Videos to watch"
+            hint="Choose up to 10 videos. Threadlight ignores comments on every other video."
+          >
+            <div className="video-list">
+              {videosLoading && <small>Loading your recent videos...</small>}
+              {!videosLoading && videos.length === 0 && (
+                <small>No videos were found for this channel.</small>
+              )}
+              {videos.map((video) => {
+                const checked = selectedVideoIds.has(video.id);
+                return (
+                  <label className="video-option" key={video.id}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        setSelectedVideoIds((current) => {
+                          const next = new Set(current);
+                          if (next.has(video.id)) next.delete(video.id);
+                          else if (next.size < 10) next.add(video.id);
+                          return next;
+                        })
+                      }
+                    />
+                    {video.thumbnailUrl && <img src={video.thumbnailUrl} alt="" />}
+                    <span>{video.title}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
           <Field label="Reply policy">
             <select
               value={replyMode}
@@ -697,7 +744,20 @@ function YouTubeConnection({
               <button type="button" className="text-button" onClick={onBack}>
                 Back
               </button>
-              <button type="button" className="primary" onClick={onContinue} disabled={busy}>
+              <button
+                type="button"
+                className="primary"
+                onClick={() =>
+                  void save()
+                    .then(onContinue)
+                    .catch((reason: unknown) =>
+                      onError(
+                        reason instanceof Error ? reason.message : "Choose at least one video.",
+                      ),
+                    )
+                }
+                disabled={busy || selectedVideoIds.size === 0}
+              >
                 Configure Threadlight <ArrowRight size={17} />
               </button>
             </div>

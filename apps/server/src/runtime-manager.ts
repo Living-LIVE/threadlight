@@ -223,7 +223,10 @@ export class ThreadlightRuntimeManager {
       return;
     }
     if (!providerConfigured(config.providers.ai) || !deploymentConfigured(active)) return;
-    if (config.providers.ai.provider !== "openai" || config.providers.scripture.provider !== "ao")
+    if (
+      !["openai", "gloo"].includes(config.providers.ai.provider) ||
+      config.providers.scripture.provider !== "ao"
+    )
       return;
     if (this.youtube && this.youtubeId === active.id) return;
     await this.stopYouTube();

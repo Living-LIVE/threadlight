@@ -22,6 +22,12 @@ export type YouTubeComment = {
   canReply: boolean;
 };
 
+export type YouTubeVideo = {
+  id: string;
+  title: string;
+  thumbnailUrl?: string;
+};
+
 type FetchFn = typeof fetch;
 
 export class YouTubeClient {
@@ -67,6 +73,38 @@ export class YouTubeClient {
     if (!channel?.id)
       throw new YouTubeApiError("No owned YouTube channel was found for this account.");
     return { id: channel.id, name: channel.snippet?.title ?? "YouTube channel" };
+  }
+
+  public async ownedVideos(accessToken: string): Promise<YouTubeVideo[]> {
+    const query = new URLSearchParams({
+      part: "snippet",
+      forMine: "true",
+      type: "video",
+      order: "date",
+      maxResults: "50",
+    });
+    const payload = await this.request<{
+      items?: Array<{
+        id?: { videoId?: string };
+        snippet?: {
+          title?: string;
+          thumbnails?: { medium?: { url?: string }; default?: { url?: string } };
+        };
+      }>;
+    }>(`/search?${query}`, accessToken);
+    return (payload.items ?? [])
+      .map((item): YouTubeVideo | undefined => {
+        const id = item.id?.videoId;
+        const snippet = item.snippet;
+        const title = snippet?.title;
+        if (!id || !title) return undefined;
+        return {
+          id,
+          title,
+          thumbnailUrl: snippet.thumbnails?.medium?.url ?? snippet.thumbnails?.default?.url,
+        };
+      })
+      .filter((video): video is YouTubeVideo => Boolean(video));
   }
 
   public async recentComments(accessToken: string, channelId: string) {
@@ -122,6 +160,40 @@ export class YouTubeClient {
       .filter((comment): comment is YouTubeComment => Boolean(comment));
   }
 
+  public async recentCommentsForVideos(accessToken: string, videoIds: string[]) {
+    const batches = await Promise.all(
+      videoIds.map(async (videoId) => {
+        const query = new URLSearchParams({
+          part: "snippet",
+          videoId,
+          order: "time",
+          maxResults: "100",
+          textFormat: "plainText",
+        });
+        const payload = await this.request<{
+          items?: Array<{
+            snippet?: {
+              canReply?: boolean;
+              videoId?: string;
+              topLevelComment?: {
+                id?: string;
+                snippet?: {
+                  authorChannelId?: { value?: string };
+                  authorDisplayName?: string;
+                  textDisplay?: string;
+                  publishedAt?: string;
+                  videoId?: string;
+                };
+              };
+            };
+          }>;
+        }>(`/commentThreads?${query}`, accessToken);
+        return this.commentsFromThreads(payload.items ?? []);
+      }),
+    );
+    return batches.flat();
+  }
+
   public async reply(accessToken: string, parentId: string, text: string) {
     await this.request("/comments?part=snippet", accessToken, "POST", {
       snippet: { parentId, textOriginal: text },
@@ -170,6 +242,50 @@ export class YouTubeClient {
     if (!response.ok)
       throw new YouTubeApiError(payload.error?.message ?? "YouTube request failed.");
     return payload;
+  }
+
+  private commentsFromThreads(
+    threads: Array<{
+      snippet?: {
+        canReply?: boolean;
+        videoId?: string;
+        topLevelComment?: {
+          id?: string;
+          snippet?: {
+            authorChannelId?: { value?: string };
+            authorDisplayName?: string;
+            textDisplay?: string;
+            publishedAt?: string;
+            videoId?: string;
+          };
+        };
+      };
+    }>,
+  ) {
+    return threads
+      .map((thread): YouTubeComment | undefined => {
+        const top = thread.snippet?.topLevelComment;
+        const snippet = top?.snippet;
+        const videoId = thread.snippet?.videoId ?? snippet?.videoId;
+        if (
+          !top?.id ||
+          !snippet?.authorDisplayName ||
+          !snippet.textDisplay ||
+          !snippet.publishedAt ||
+          !videoId
+        )
+          return undefined;
+        return {
+          id: top.id,
+          videoId,
+          authorId: snippet.authorChannelId?.value,
+          authorName: snippet.authorDisplayName,
+          text: snippet.textDisplay,
+          publishedAt: snippet.publishedAt,
+          canReply: Boolean(thread.snippet?.canReply),
+        };
+      })
+      .filter((comment): comment is YouTubeComment => Boolean(comment));
   }
 }
 

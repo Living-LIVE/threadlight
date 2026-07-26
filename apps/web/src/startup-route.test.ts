@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveStartupRoute } from "./startup-route.js";
 
 describe("resolveStartupRoute", () => {
-  it("continues a successful YouTube OAuth return in model configuration", () => {
+  it("returns a successful YouTube OAuth return to video selection", () => {
     expect(
       resolveStartupRoute(
         [
@@ -16,9 +16,9 @@ describe("resolveStartupRoute", () => {
         "connected",
       ),
     ).toMatchObject({
-      screen: "launch",
+      screen: "connect",
       selectedId: "youtube-1",
-      notice: expect.stringContaining("YouTube connected"),
+      notice: expect.stringContaining("Choose the videos"),
     });
   });
 

@@ -144,6 +144,7 @@ describe("local control configuration", () => {
                   ...deployment.youtube,
                   channelId: "channel-id",
                   refreshToken: "refresh-token",
+                  selectedVideos: [{ id: "video-id", title: "Test video" }],
                 },
               }
             : deployment,
@@ -154,7 +155,7 @@ describe("local control configuration", () => {
         url: `/api/control/deployments/${youtubeId}/launch`,
       });
       expect(unavailableProvider.statusCode).toBe(409);
-      expect(unavailableProvider.json().message).toContain("OpenAI and AO Lab");
+      expect(unavailableProvider.json().message).toContain("OpenAI or Gloo");
 
       const planned = await app.inject({
         method: "POST",

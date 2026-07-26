@@ -3,6 +3,7 @@ import {
   AoLabScriptureProvider,
   FixtureAIProvider,
   FixtureScriptureProvider,
+  GlooProvider,
   OpenAIProvider,
 } from "@threadlight/providers";
 import type { LocalControlConfig } from "./control.js";
@@ -30,21 +31,27 @@ export function createDemoRuntime(config: ThreadlightConfig): ThreadlightOrchest
 }
 
 export function createControlRuntime(config: LocalControlConfig): ThreadlightOrchestrator {
-  if (config.providers.ai.provider !== "openai") {
+  if (!["openai", "gloo"].includes(config.providers.ai.provider)) {
     throw new Error(`No runtime adapter is installed for ${config.providers.ai.provider}`);
   }
   if (config.providers.scripture.provider !== "ao") {
     throw new Error(`No runtime adapter is installed for ${config.providers.scripture.provider}`);
   }
 
-  const apiKey = config.providers.ai.openaiApiKey;
-  if (!apiKey) throw new Error("OpenAI API key is required");
+  const aiProvider =
+    config.providers.ai.provider === "gloo"
+      ? new GlooProvider({
+          clientId: required(config.providers.ai.glooClientId, "GLOO_CLIENT_ID"),
+          clientSecret: required(config.providers.ai.glooClientSecret, "GLOO_CLIENT_SECRET"),
+          model: config.providers.ai.glooModel,
+        })
+      : new OpenAIProvider({
+          apiKey: required(config.providers.ai.openaiApiKey, "OPENAI_API_KEY"),
+          model: config.providers.ai.model,
+        });
 
   return new DefaultThreadlightOrchestrator({
-    aiProvider: new OpenAIProvider({
-      apiKey,
-      model: config.providers.ai.model,
-    }),
+    aiProvider,
     scriptureProvider: new AoLabScriptureProvider({ bibleId: config.providers.scripture.bibleId }),
   });
 }
@@ -62,6 +69,13 @@ function createAiProvider(config: ThreadlightConfig) {
     });
   }
   if (config.AI_PROVIDER === "fixture") return new FixtureAIProvider();
+  if (config.AI_PROVIDER === "gloo") {
+    return new GlooProvider({
+      clientId: required(config.GLOO_CLIENT_ID, "GLOO_CLIENT_ID"),
+      clientSecret: required(config.GLOO_CLIENT_SECRET, "GLOO_CLIENT_SECRET"),
+      model: config.GLOO_MODEL,
+    });
+  }
   throw new Error(`No runtime adapter is installed for ${config.AI_PROVIDER}`);
 }
 

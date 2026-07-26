@@ -56,6 +56,34 @@ describe("YouTubeClient", () => {
       }),
     );
   });
+
+  it("lists the authenticated channel's videos and scopes comment requests to selected videos", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              id: { videoId: "video-1" },
+              snippet: {
+                title: "A message of hope",
+                thumbnails: { medium: { url: "https://img.test/1" } },
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ items: [] }));
+    const client = new YouTubeClient(fetchFn);
+    await expect(client.ownedVideos("access-token")).resolves.toEqual([
+      { id: "video-1", title: "A message of hope", thumbnailUrl: "https://img.test/1" },
+    ]);
+    await client.recentCommentsForVideos("access-token", ["video-1"]);
+    expect(fetchFn).toHaveBeenLastCalledWith(
+      expect.stringContaining("commentThreads?part=snippet&videoId=video-1"),
+      expect.any(Object),
+    );
+  });
 });
 
 describe("YouTube OAuth state", () => {

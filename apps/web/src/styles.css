@@ -266,6 +266,43 @@ input:focus {
   grid-template-columns: 1fr 1fr;
   gap: 18px;
 }
+
+.video-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.video-option {
+  align-items: center;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 72px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 7px 10px;
+}
+
+.video-option input {
+  margin: 0;
+}
+
+.video-option img {
+  display: block;
+  height: 40px;
+  object-fit: cover;
+  width: 72px;
+}
+
+.video-option span {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .helper {
   gap: 7px;
   margin: -5px 0 34px;

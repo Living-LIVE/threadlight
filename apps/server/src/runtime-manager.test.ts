@@ -66,6 +66,7 @@ async function createYouTubeStore(): Promise<LocalControlStore> {
         youtube: {
           channelId: "channel-id",
           channelName: "Test Channel",
+          selectedVideos: [{ id: "video-id", title: "Test video" }],
           clientId: "client-id",
           clientSecret: "client-secret",
           refreshToken: "refresh-token",

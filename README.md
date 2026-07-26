@@ -80,6 +80,16 @@ cp .env.example .env.local
 
 Never commit `.env.local`, Docker volumes, or `.threadlight/` configuration files.
 
+### YouTube Comments
+
+Configure `YOUTUBE_OAUTH_CLIENT_ID` and `YOUTUBE_OAUTH_CLIENT_SECRET` once in the server or
+Docker environment. They identify the Threadlight installation's Google OAuth application and
+are never entered in, or returned to, the dashboard.
+
+After that one-time installation setup, a channel owner selects **YouTube Comments**, signs in
+with the Google account that owns their channel, and chooses up to ten videos for Threadlight to
+watch. The connector polls only those selected videos. Comments become review drafts by default.
+
 ## Discord Prerequisites
 
 Create a Discord application and bot, enable **Message Content Intent**, and install it in the

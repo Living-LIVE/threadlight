@@ -54,10 +54,16 @@ const SlackSettingsSchema = z.object({
 
 const YouTubeReplyModeSchema = z.enum(["review", "selective", "high-touch"]);
 const YouTubeDraftStatusSchema = z.enum(["pending", "posted", "rejected", "skipped", "failed"]);
+const YouTubeVideoSchema = z.object({
+  id: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(1).max(200),
+  thumbnailUrl: z.string().url().max(1_000).optional(),
+});
 
 const YouTubeSettingsSchema = z.object({
   channelId: z.string().trim().max(160).optional(),
   channelName: z.string().trim().max(160).optional(),
+  selectedVideos: z.array(YouTubeVideoSchema).max(10).default([]),
   clientId: z.string().trim().max(300).optional(),
   clientSecret: z.string().trim().max(800).optional(),
   refreshToken: z.string().trim().max(800).optional(),
@@ -262,6 +268,7 @@ export function sanitizeConfig(config: LocalControlConfig) {
         ? {
             channelId: deployment.youtube.channelId,
             channelName: deployment.youtube.channelName,
+            selectedVideos: deployment.youtube.selectedVideos,
             clientIdConfigured: Boolean(deployment.youtube.clientId),
             clientSecretConfigured: Boolean(deployment.youtube.clientSecret),
             refreshTokenConfigured: Boolean(deployment.youtube.refreshToken),
@@ -319,9 +326,10 @@ export function deploymentConfigured(deployment: Deployment): boolean {
   if (deployment.kind === "youtube-comments") {
     return Boolean(
       deployment.youtube?.channelId &&
+        deployment.youtube.refreshToken &&
+        deployment.youtube.selectedVideos.length > 0 &&
         deployment.youtube.clientId &&
-        deployment.youtube.clientSecret &&
-        deployment.youtube.refreshToken,
+        deployment.youtube.clientSecret,
     );
   }
   return false;

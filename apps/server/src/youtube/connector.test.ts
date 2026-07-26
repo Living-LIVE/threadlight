@@ -35,6 +35,7 @@ async function store(replyMode: "review" | "selective" | "high-touch" = "review"
         youtube: {
           channelId: "owner-channel",
           channelName: "Test Channel",
+          selectedVideos: [{ id: "video-1", title: "Test video" }],
           clientId: "client-id",
           clientSecret: "client-secret",
           refreshToken: "refresh-token",
@@ -57,7 +58,7 @@ describe("YouTubeConnector", () => {
     const reply = vi.fn(async () => undefined);
     const client = {
       refresh: vi.fn(async () => ({ accessToken: "access-token", expiresIn: 3600 })),
-      recentComments: vi.fn(async () => [
+      recentCommentsForVideos: vi.fn(async () => [
         {
           id: "comment-1",
           videoId: "video-1",
@@ -114,7 +115,7 @@ describe("YouTubeConnector", () => {
     const reply = vi.fn(async () => undefined);
     const client = {
       refresh: vi.fn(async () => ({ accessToken: "access-token", expiresIn: 3600 })),
-      recentComments: vi.fn(async () => [
+      recentCommentsForVideos: vi.fn(async () => [
         {
           id: "comment-2",
           videoId: "video-1",
@@ -161,7 +162,7 @@ describe("YouTubeConnector", () => {
     const controlStore = await store("high-touch");
     const client = {
       refresh: vi.fn(async () => ({ accessToken: "access-token", expiresIn: 3600 })),
-      recentComments: vi.fn(async () => [
+      recentCommentsForVideos: vi.fn(async () => [
         {
           id: "comment-3",
           videoId: "video-1",
@@ -210,7 +211,7 @@ describe("YouTubeConnector", () => {
     const reply = vi.fn(async () => undefined);
     const client = {
       refresh: vi.fn(async () => ({ accessToken: "access-token", expiresIn: 3600 })),
-      recentComments: vi.fn(async () => [
+      recentCommentsForVideos: vi.fn(async () => [
         {
           id: "comment-urgent",
           videoId: "video-1",

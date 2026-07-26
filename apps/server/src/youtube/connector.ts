@@ -40,9 +40,9 @@ export class YouTubeConnector {
     const deployment = await this.deployment();
     const settings = requiredSettings(deployment);
     const token = await this.client.refresh(oauthConfig(settings), required(settings.refreshToken));
-    const comments = await this.client.recentComments(
+    const comments = await this.client.recentCommentsForVideos(
       token.accessToken,
-      required(settings.channelId),
+      settings.selectedVideos.map((video) => video.id),
     );
     const existing = new Set(settings.processedCommentIds);
     const candidates = comments.filter(
@@ -261,7 +261,11 @@ function requiredSettings(deployment: Deployment) {
 
 function deploymentConfigured(settings: YouTubeSettings) {
   return Boolean(
-    settings.channelId && settings.clientId && settings.clientSecret && settings.refreshToken,
+    settings.channelId &&
+      settings.clientId &&
+      settings.clientSecret &&
+      settings.refreshToken &&
+      settings.selectedVideos.length > 0,
   );
 }
 
