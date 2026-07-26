@@ -7,6 +7,7 @@ import type {
   ThreadlightTrigger,
 } from "@threadlight/core";
 import { ComposedReplySchema, DiscernmentDecisionSchema } from "@threadlight/core";
+import type { z } from "zod";
 
 const TOKEN_URL = "https://platform.ai.gloo.com/oauth2/token";
 const COMPLETIONS_URL = "https://platform.ai.gloo.com/ai/v2/chat/completions";
@@ -114,7 +115,11 @@ export class GlooProvider implements AIProvider {
       500,
       DISCERNMENT_FUNCTION,
     );
-    return DiscernmentDecisionSchema.parse(normalizeDiscernment(parseJson(content)));
+    return parseStructured(
+      DiscernmentDecisionSchema,
+      normalizeDiscernment(parseJson(content)),
+      "discernment",
+    );
   }
 
   async compose(input: ComposeReplyInput) {
@@ -136,7 +141,7 @@ export class GlooProvider implements AIProvider {
       700,
       COMPOSITION_FUNCTION,
     );
-    return ComposedReplySchema.parse(normalizeReply(parseJson(content)));
+    return parseStructured(ComposedReplySchema, normalizeReply(parseJson(content)), "reply");
   }
 
   private async complete(
@@ -256,4 +261,13 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function parseStructured<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const error = new Error(`Gloo ${label} output did not match the required schema.`);
+  const fields = parsed.error.issues.map((issue) => issue.path.join(".") || "root").join(",");
+  error.name = `Gloo${label[0]?.toUpperCase()}${label.slice(1)}SchemaError:${fields}`;
+  throw error;
 }
