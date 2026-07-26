@@ -6,18 +6,20 @@ Verify the exact current source can build and run as the documented self-hosted 
 
 ## Result
 
-`docker version` succeeded and reported Docker Engine `28.1.1`. The exact-source command below
-started normally, reached the workspace production-build step, then made no observable progress
-for more than 85 seconds. The build process consumed no CPU during the bounded wait and was
-terminated by the operator. The Docker daemon remained responsive afterward.
+`docker version` succeeded and reported Docker Engine `28.1.1`. Both exact-source build paths
+below started normally, reached the workspace production-build step, then made no observable
+progress. Each build process consumed no CPU during its bounded wait and was terminated by the
+operator. The Docker daemon remained responsive afterward.
 
 ```bash
 docker compose build
+docker build --progress=plain -t threadlight:smoke .
 ```
 
-This is a host/Docker build-lifecycle blocker, not proof that the image or container succeeds.
-No Threadlight container was started, no credentials were mounted, and no image/runtime claim is
-made from this attempt.
+Both commands stalled at the Dockerfile's `RUN pnpm build` layer after printing the workspace
+build invocation. This rules out the Compose plugin as the immediate cause, but it does not prove
+the image or container succeeds. No Threadlight container was started, no credentials were
+mounted, and no image/runtime claim is made from these attempts.
 
 ## Remaining Verification
 
