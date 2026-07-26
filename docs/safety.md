@@ -28,6 +28,9 @@ emergency support without inventing or hardcoding a location-specific hotline.
 - Composition receives the retrieved passage as immutable source material.
 - Every displayed passage includes reference, translation, and attribution.
 - Provider errors degrade to a careful response rather than fabricated Scripture.
+- Before enabling YouVersion with AI composition, the operator must confirm that their YouVersion
+  Platform access and applicable provider terms authorize AI-generated output for the intended
+  use. An App Key alone is not proof of that approval.
 
 ## Data Handling
 

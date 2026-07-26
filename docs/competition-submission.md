@@ -4,6 +4,10 @@
 
 **One-line pitch:** Threadlight brings restrained, Scripture-grounded presence into the digital conversations people already have, starting with Discord and YouTube Comments.
 
+**Challenge fit:** Social & Emerging Interfaces, with a Creator & Content Tools secondary fit.
+Threadlight is built around the challenge's YouVersion Platform and Gloo AI Studio building
+blocks inside existing conversation habits rather than introducing another destination to manage.
+
 ## What Eric Submits
 
 | Submission surface | Prepared artifact | Owner action |
