@@ -58,3 +58,4 @@ Target length: 3 to 4 minutes.
 - [YouTube connector QA](qa/2026-07-26-youtube-comments-connector.md)
 - [Competition readiness notes](competition-readiness.md)
 - [Notebook run instructions](../notebook/README.md)
+- [Notebook execution evidence](qa/2026-07-26-competition-finish.md)

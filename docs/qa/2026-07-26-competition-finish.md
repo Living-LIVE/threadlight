@@ -9,8 +9,9 @@ Prepare Threadlight for competition handoff without submitting it.
 | Surface | State |
 | --- | --- |
 | Local source | Gloo AI and YouVersion Scripture adapters implemented; Google-owned-video setup and scoped polling implemented. |
-| Branch | `codex/build-threadlight`; latest pushed commit before this finish pass: `1783757`. |
+| Branch | `codex/build-threadlight`; latest pushed commit: `838c84f`. |
 | Local verification | `pnpm check` passed: 46 tests across 15 files, lint, typechecks, and production builds. |
+| Kaggle notebook | Ran the notebook's code path against a fresh local production server using fixture providers: readiness passed and the grief scenario returned a traced, attributed Psalm 34:18 response. |
 | Hosted dashboard | Vercel dashboard is live at `https://threadlight.vercel.app`. |
 | Hosted runtime | Railway control API reports the YouTube OAuth client configured. |
 | Google OAuth | Railway callback is registered. Account authorization and selected-video test remain pending browser interaction. |
@@ -23,6 +24,7 @@ Prepare Threadlight for competition handoff without submitting it.
 - [Competition readiness](../competition-readiness.md)
 - [Local full-suite QA](2026-07-26-full-suite-local.md)
 - [YouTube connector QA](2026-07-26-youtube-comments-connector.md)
+- [Notebook run instructions](../../notebook/README.md)
 
 ## Exact Next Actions
 
