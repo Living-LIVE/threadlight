@@ -32,7 +32,7 @@ The project uses Gloo for values-aligned AI routing and YouVersion or AO Lab for
 
 ## Demo Script
 
-Target length: 3 to 4 minutes.
+Target length: 2 minutes 30 seconds to 3 minutes.
 
 1. Open with the problem: care, reflection, and Scripture are often disconnected from the moment people need them.
 2. Show the Threadlight dashboard, choose Discord, and explain Prompted, Attentive, and Active presence.

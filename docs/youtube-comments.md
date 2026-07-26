@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implemented locally and deployed. Live OAuth and public-comment verification remain pending.**
+**Implemented in the current source. A hosted control surface is available; live OAuth and public-comment verification remain pending.**
 
 The local dashboard includes a YouTube Comments destination, OAuth connection flow, Data API
 client, poller, review queue, and guarded threaded-reply path. The connector is covered by local
