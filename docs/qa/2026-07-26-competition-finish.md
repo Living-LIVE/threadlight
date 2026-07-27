@@ -34,8 +34,19 @@ Prepare Threadlight for competition handoff without submitting it.
 
 ## Exact Next Actions
 
-1. Deploy the current source before any further hosted YouTube use. It serializes overlapping scans,
-   fixing the duplicate-draft race found in the controlled canary, and includes the remote-control
-   hardening documented in the public security review.
-2. Resolve the YouVersion provider failure with its owner, then rerun one attributed-passage canary. AO Lab remains the verified fallback for the live demo.
-3. Publish the Kaggle notebook and demo media, then update the final submission links and media checklist.
+1. Publish the prepared Kaggle notebook and demo media, then update the final submission links and
+   media checklist.
+2. Resolve the YouVersion provider failure with its owner, then rerun one attributed-passage canary.
+   AO Lab remains the verified live fallback for the demo.
+
+## 2026-07-27 Deployment Addendum
+
+- GitHub handoff branch is current at `b66de36`.
+- Railway production deployment `41d2d5b3-d6b2-466d-8a73-38155eca445c` is successful. Its no-login
+  curated public scenario returned `200` with a live Gloo plus AO Lab trace and Psalm 34:18 (BSB).
+  Its unauthenticated operator control endpoint returned `401`.
+- Vercel production remains available at `https://threadlight.vercel.app`, targets Railway as its
+  public API origin, and serves the hardening headers recorded in the public security review.
+- The public Kaggle companion notebook was updated for the curated public API and executed against
+  an isolated fixture runtime without credentials. It is ready for Eric to publish, but has not
+  been published or submitted.

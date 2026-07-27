@@ -14,8 +14,7 @@ Gloo/AO-backed review draft; one owner-approved draft was posted as a threaded r
 
 The source now serializes overlapping scans within each runtime process. This prevents the
 duplicate-draft race discovered during the single-instance hosted canary; a future multi-instance
-runtime would need a shared lease. The current hosted checkpoint still needs the next source release
-before this safeguard is active.
+runtime would need a shared lease. Railway production now runs this single-process safeguard.
 
 ## Product Intent
 

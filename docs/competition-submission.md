@@ -5,8 +5,10 @@
 **One-line pitch:** Threadlight brings restrained, Scripture-grounded presence into the digital conversations people already have, starting with Discord and YouTube Comments.
 
 **Challenge fit:** Social & Emerging Interfaces, with a Creator & Content Tools secondary fit.
-Threadlight is built around the challenge's YouVersion Platform and Gloo AI Studio building
+Threadlight is designed around the challenge's YouVersion Platform and Gloo AI Studio building
 blocks inside existing conversation habits rather than introducing another destination to manage.
+The current live demo uses the verified Gloo plus AO Lab provider pair; do not claim a live
+YouVersion retrieval until its passage canary succeeds.
 
 ## What Eric Submits
 
@@ -32,7 +34,10 @@ Threadlight is a self-hosted, Scripture-native companion for shared digital conv
 
 For Discord, Threadlight can be Prompted, Attentive, or Active. For YouTube, a channel owner signs in with Google, chooses exactly which videos Threadlight should watch, and receives reply drafts by default before anything is posted publicly. Sensitive or urgent comments are never queued or published automatically.
 
-The project uses Gloo for values-aligned AI routing and YouVersion or AO Lab for attributed Scripture retrieval. It is packaged as an open-source, self-hosted Docker application with a lightweight local control dashboard.
+The project uses Gloo for values-aligned AI routing and AO Lab for the currently verified,
+attributed Scripture retrieval path. The YouVersion adapter is implemented but remains unverified
+in production. Threadlight is packaged as an open-source, self-hosted Docker application with a
+lightweight local control dashboard.
 
 ## Demo Script
 

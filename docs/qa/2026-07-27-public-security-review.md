@@ -22,10 +22,9 @@ protect direct HTTP clients.
 closed with `503`; invalid or absent bearer tokens receive `401`. Comparison uses constant-time
 bytes. The static dashboard asks for the code at runtime and retains it only in memory.
 
-**Deployment requirement:** Before deploying this commit, configure a unique token of at least 32
-characters in Railway as `THREADLIGHT_CONTROL_TOKEN`. Enter the same token only in the operator
-dashboard when prompted. The currently deployed Railway runtime predates this change and remains
-an exposure until that configuration and deployment occur.
+**Deployment result:** Railway production deployment `41d2d5b3-d6b2-466d-8a73-38155eca445c`
+has a unique `THREADLIGHT_CONTROL_TOKEN` configured. An unauthenticated live request to
+`/api/control/status` now returns `401`; the token is not committed, logged, or published.
 
 ### TL-SEC-002 - Medium - Anonymous remote demo could consume configured providers
 
@@ -65,8 +64,15 @@ data images needed by selected-video thumbnails.
 - Focused server control and web type checks passed after the access boundary change.
 - Control tests prove missing, invalid, and valid remote tokens; they also prove remote demo is
   disabled by default.
+- Live Railway verification: public scenarios returned `200`; a curated public reflection returned
+  `200` with a Gloo plus AO Lab trace and attributed Psalm 34:18 (BSB); arbitrary prompt text
+  returned `400`; unauthenticated control returned `401`.
+- Live Vercel verification: `https://threadlight.vercel.app` returned `200`, includes the Railway
+  API origin, and serves CSP, frame denial, no-sniff, referrer, permissions, and no-index headers.
 
 ## Residual Risk
 
-The code change is not live until an operator configures the Railway token and deploys it. Rotate
-any provider credential if there is evidence it was exposed outside the repository review scope.
+The public demo intentionally invokes the saved provider pair for only four server-owned scenarios
+and is limited to five responses per IP per minute. Use a stronger upstream rate limit or bot
+protection before treating it as a high-traffic public endpoint. Rotate any provider credential if
+there is evidence it was exposed outside the repository review scope.

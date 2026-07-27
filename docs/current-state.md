@@ -55,10 +55,10 @@ not be described as available in demos, issues, or release notes.
   still could not form a response. The running deployment has been restored to the verified AO Lab
   fallback. The YouVersion adapter therefore still lacks a live passage-retrieval canary.
 - Docker binds to loopback by default. Remote control requires `THREADLIGHT_CONTROL_TOKEN` and
-  should also sit behind an authenticated proxy owned by the operator. The current hosted
-  checkpoint must receive that token and this security release before it can be described as a
-  protected remote operator surface. The public preview remains intentionally available without
-  that code; its live-response endpoint requires `THREADLIGHT_DEMO_ENABLED=true`.
+  should also sit behind an authenticated proxy owned by the operator. Railway production now has
+  that token configured: remote configuration, OAuth, drafts, and posting routes return `401`
+  without it. The public preview remains intentionally available without that code; its live
+  response uses the saved Gloo plus AO Lab provider pair and requires `THREADLIGHT_DEMO_ENABLED=true`.
 - The current Docker image passed an exact-source build and isolated container health/control API
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 

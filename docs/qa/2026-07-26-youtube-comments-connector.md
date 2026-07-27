@@ -84,21 +84,19 @@ video accepted a controlled non-owner comment, a hosted scan created a Gloo/AO r
 one approved Isaiah 41:10 reply posted through YouTube's threaded-comment API. The runtime
 reported one posted reply. Two duplicate drafts created by overlapping scans were rejected.
 
-The current source serializes same-process scans and is not yet deployed to Railway. Before any
-further hosted YouTube use, configure `THREADLIGHT_CONTROL_TOKEN` in Railway and deploy the
-current branch. The control token hardening and scan serialization are both in the pending source
-release. A future multi-instance runtime will also need a shared lease to prevent cross-instance
-scan overlap.
+Railway production deployment `41d2d5b3-d6b2-466d-8a73-38155eca445c` now includes same-process
+scan serialization and the remote-control token boundary. A future multi-instance runtime will
+still need a shared lease to prevent cross-instance scan overlap.
 
 ## 2026-07-27 Finish-Line Coverage Ledger
 
 | Issue or behavior | Failure mode or acceptance criterion | Direct executable coverage | Focused command | Broader suite | Status |
 | --- | --- | --- | --- | --- | --- |
 | Review-first reply flow | An eligible non-owner comment must create a draft and only post after approval. | `apps/server/src/youtube/connector.test.ts` - `creates one review draft, deduplicates it, and posts only after approval` asserts draft creation, no pre-approval post, and exact threaded-reply payload. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally; one hosted canary passed. |
-| Overlapping scans | Concurrent manual and scheduled scans must not create duplicate drafts. | `apps/server/src/youtube/connector.test.ts` - `serializes overlapping scans so a comment produces only one draft` asserts three concurrent scans make one upstream comment request and one draft. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally; source deployment pending. |
+| Overlapping scans | Concurrent manual and scheduled scans must not create duplicate drafts. | `apps/server/src/youtube/connector.test.ts` - `serializes overlapping scans so a comment produces only one draft` asserts three concurrent scans make one upstream comment request and one draft. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally; current Railway source includes the single-process safeguard. |
 | Scan recovery | A failed token refresh must not leave the connector permanently locked. | `apps/server/src/youtube/connector.test.ts` - `releases the scan lock after a failed poll so a later scan can recover` asserts the next scan refreshes and completes. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally. |
 | Dashboard persistence | Changing reply policy must save before the scan or launch request. | `apps/web/src/youtube-action.test.ts` - `persists reply policy changes before a scan or launch request`. | `pnpm vitest run apps/web/src/youtube-action.test.ts` | `pnpm test` | Passed locally. |
-| Remote operator access | Missing or invalid remote control credentials must be rejected; anonymous remote provider demo must be disabled. | `apps/server/src/control.test.ts` - `requires an operator token for remote control and disables anonymous demos` and `fails closed when a remote control token is not configured`. | `pnpm vitest run apps/server/src/control.test.ts` | `pnpm test` | Passed locally; hosted deployment pending. |
+| Remote operator access | Missing or invalid remote control credentials must be rejected; public demos must remain curated and bounded. | `apps/server/src/control.test.ts` - `requires an operator token for remote control and disables anonymous demos`, `fails closed when a remote control token is not configured`, and `allows a bounded public demo without exposing remote control`. | `pnpm vitest run apps/server/src/control.test.ts` | `pnpm test` | Passed locally; Railway control endpoint returned `401` without a token while the Gloo/AO public scenario returned `200`. |
 
 Focused finish-line validation ran:
 
