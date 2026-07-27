@@ -134,6 +134,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const controlPreviewLimiter = new MemoryRateLimiter(20, 60_000);
   const publicDemoLimiter = new MemoryRateLimiter(5, 60_000);
   const youtube = new YouTubeClient();
+  const controlRuntimeFactory = options.controlRuntimeFactory ?? createControlRuntime;
 
   await app.register(cors, {
     origin: options.config.WEB_ORIGIN,
@@ -208,7 +209,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const controlStore = options.controlStore;
   const runtimeManager = options.runtimeManager;
   if (controlStore && runtimeManager) {
-    const controlRuntimeFactory = options.controlRuntimeFactory ?? createControlRuntime;
     app.addHook("onRequest", async (request, reply) => {
       if (!isProtectedControlRoute(request.url) || !requiresRemoteControlToken(options.config))
         return;
@@ -655,7 +655,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
 
     try {
-      const result = await options.orchestrator.respond({
+      const runtime = controlStore
+        ? controlRuntimeFactory(await controlStore.load())
+        : options.orchestrator;
+      const result = await runtime.respond({
         context: {
           channelId: `demo:${scenario.id}`,
           roomName: scenario.roomName,

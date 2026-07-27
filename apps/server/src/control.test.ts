@@ -277,6 +277,7 @@ describe("local control configuration", () => {
 
   it("allows a bounded public demo without exposing remote control", async () => {
     const store = await createStore();
+    let publicRuntimeFactoryCalls = 0;
     const config = loadConfig({
       NODE_ENV: "test",
       THREADLIGHT_PUBLIC_URL: "https://threadlight.example.test",
@@ -294,6 +295,13 @@ describe("local control configuration", () => {
       }),
       controlStore: store,
       runtimeManager: new ThreadlightRuntimeManager(store),
+      controlRuntimeFactory: () => {
+        publicRuntimeFactoryCalls += 1;
+        return new DefaultThreadlightOrchestrator({
+          aiProvider: new FixtureAIProvider(),
+          scriptureProvider: new FixtureScriptureProvider(),
+        });
+      },
       logger: false,
     });
 
@@ -315,6 +323,7 @@ describe("local control configuration", () => {
         reply: { passage: { reference: "Psalm 34:18" } },
         trace: { aiProvider: "fixture-ai", scriptureProvider: "fixture-scripture" },
       });
+      expect(publicRuntimeFactoryCalls).toBe(1);
 
       const arbitraryPrompt = await app.inject({
         method: "POST",

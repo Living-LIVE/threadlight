@@ -65,8 +65,9 @@ runtime environment, and enter it in the dashboard when prompted. The access cod
 the browser's current memory and is never bundled into the Vercel build. The public preview does
 not require a login and never exposes configuration, OAuth, drafts, or posting controls. To let
 visitors run the bounded live preview, deliberately configure `THREADLIGHT_DEMO_ENABLED=true`.
-That endpoint only runs server-owned, curated scenarios and is rate-limited to five responses per
-IP per minute. Enable it only when provider usage for public demonstration is intended.
+That endpoint only runs server-owned, curated scenarios through the saved AI and Scripture provider
+pair, and is rate-limited to five responses per IP per minute. Enable it only when provider usage
+for public demonstration is intended.
 
 ### Local Development
 
