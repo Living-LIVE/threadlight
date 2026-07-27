@@ -110,6 +110,54 @@ describe("YouTubeConnector", () => {
     expect((await controlStore.load()).deployments[0]?.youtube?.drafts[0]?.status).toBe("posted");
   });
 
+  it("serializes overlapping scans so a comment produces only one draft", async () => {
+    const controlStore = await store();
+    const client = {
+      refresh: vi.fn(async () => ({ accessToken: "access-token", expiresIn: 3600 })),
+      recentCommentsForVideos: vi.fn(async () => [
+        {
+          id: "comment-overlap",
+          videoId: "video-1",
+          authorId: "viewer-1",
+          authorName: "Taylor",
+          text: "Could you pray for me?",
+          publishedAt: "2026-07-26T12:00:00.000Z",
+          canReply: true,
+        },
+      ]),
+      reply: vi.fn(async () => undefined),
+    } as unknown as YouTubeClient;
+    const connector = new YouTubeConnector(
+      "11111111-1111-4111-8111-111111111111",
+      controlStore,
+      {
+        respond: vi.fn(async () => ({
+          decision: {
+            action: "respond",
+            riskLevel: "low",
+            reason: "Asked for prayer",
+            pastoralIntent: "Care",
+            scriptureRequest: null,
+          },
+          reply: { id: "reply-overlap", message: "I am praying with you." },
+          trace: {
+            id: "trace-overlap",
+            aiProvider: "fixture",
+            scriptureProvider: "fixture",
+            totalMs: 0,
+            steps: [],
+          },
+        })),
+      } as unknown as ThreadlightOrchestrator,
+      client,
+    );
+
+    await Promise.all([connector.scan(), connector.scan(), connector.scan()]);
+
+    expect((await controlStore.load()).deployments[0]?.youtube?.drafts).toHaveLength(1);
+    expect(client.recentCommentsForVideos).toHaveBeenCalledTimes(1);
+  });
+
   it("posts an eligible selective reply without creating a draft", async () => {
     const controlStore = await store("selective");
     const reply = vi.fn(async () => undefined);

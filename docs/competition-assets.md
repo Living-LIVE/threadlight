@@ -15,7 +15,9 @@ no credentials, private browser chrome, or unpublished comment content.
 1. Use the desktop provider preview as the cover image.
 2. Use a short recorded dashboard walkthrough showing the same provider preview.
 3. Capture the Discord deployment flow and a controlled, sourced interaction.
-4. Capture the YouTube Google connection, selected-video allowlist, and review queue after the approved non-owner canary is complete.
+4. Capture the YouTube Google connection, selected-video allowlist, review queue, and the single
+   posted canary reply. Keep the controlled comment and reply context visible; do not show any
+   unrelated viewer comments.
 
 ## Recording Notes
 

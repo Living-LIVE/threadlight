@@ -15,6 +15,7 @@ export type YouTubeConnectorStatus = {
 
 export class YouTubeConnector {
   private timer?: NodeJS.Timeout;
+  private scanInFlight?: Promise<void>;
   private stopped = true;
 
   public constructor(
@@ -36,7 +37,16 @@ export class YouTubeConnector {
     this.timer = undefined;
   }
 
-  public async scan() {
+  public scan() {
+    if (!this.scanInFlight) {
+      this.scanInFlight = this.scanInternal().finally(() => {
+        this.scanInFlight = undefined;
+      });
+    }
+    return this.scanInFlight;
+  }
+
+  private async scanInternal() {
     const deployment = await this.deployment();
     const settings = requiredSettings(deployment);
     const token = await this.client.refresh(oauthConfig(settings), required(settings.refreshToken));

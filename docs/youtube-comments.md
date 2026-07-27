@@ -3,17 +3,18 @@
 ## Status
 
 **Implemented in the current source. The hosted control surface, Google OAuth callback, owned-channel
-connection, selected-video allowlist, and owner-comment suppression canary are verified. One
-authorized non-owner draft-and-approved-reply canary remains before public threaded replies can be
-described as live-verified.**
+connection, selected-video allowlist, owner-comment suppression canary, and one controlled
+non-owner draft-and-approved-reply canary are verified.**
 
 The local dashboard includes a YouTube Comments destination, OAuth connection flow, Data API
 client, poller, review queue, and guarded threaded-reply path. The connector is covered by local
-deterministic tests, a hosted Google OAuth connection, and an owner-comment suppression canary.
-The remaining live proof is intentionally narrower: an authorized non-owner comment must produce
-a review draft, and the owner must explicitly approve one controlled threaded reply. The first
-approved non-owner check found comments disabled on the inspected selected and alternate owned
-videos, so the canary requires a dedicated owned video with comments enabled.
+deterministic tests, a hosted Google OAuth connection, owner-comment suppression, and one
+controlled non-owner comment on the selected `We Paint!` video. That comment produced a
+Gloo/AO-backed review draft; one owner-approved draft was posted as a threaded reply.
+
+The source now serializes overlapping scans for each deployment. This prevents the duplicate-draft
+race discovered during the hosted canary; the current hosted checkpoint still needs the next source
+release before that production safeguard is active.
 
 ## Product Intent
 

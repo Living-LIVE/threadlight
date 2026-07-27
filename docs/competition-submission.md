@@ -49,7 +49,7 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 
 - [x] Google OAuth callback saved and a channel-owner account connection completed.
 - [x] Controlled YouTube test video selected and manual scan verified.
-- [ ] One owner-approved reply canary completed on the test video.
+- [x] One owner-approved reply canary completed on the test video.
 - [x] Gloo provider configured and demonstrated in the dashboard/runtime.
 - [ ] Valid YouVersion App Key installed and one attributed Scripture retrieval verified.
 - [ ] Kaggle notebook published and its URL recorded above.

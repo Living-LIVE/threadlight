@@ -16,8 +16,9 @@ hosted multi-tenant service.
 - OpenAI or Gloo for AI composition, paired with AO Lab or YouVersion for Scripture retrieval.
 - A YouTube Comments connector with Google OAuth callback handling, owned-channel discovery,
   polling limited to owner-selected videos, review drafts, and explicit threaded-reply posting.
-  The hosted callback is registered, a channel-owner account is connected, and an owner-comment
-  safety canary is complete. A non-owner draft-and-approved-reply canary remains.
+  The hosted callback is registered, a channel-owner account is connected, and both the
+  owner-comment safety canary and one controlled non-owner draft-and-approved-reply canary are
+  complete.
 - Docker Compose deployment with loopback-only default binding, a durable configuration volume,
   and an exact-source image/runtime smoke test.
 - A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
@@ -44,10 +45,9 @@ not be described as available in demos, issues, or release notes.
 - Operators must supply their own Discord and provider credentials.
 - Threadlight does not persist Discord conversation history. Pending YouTube review drafts retain
   bounded comment and reply excerpts in the local configuration volume until resolved.
-- YouTube Comments has completed live Google OAuth and an owner-comment suppression canary. The
-  approved non-owner test identity found comments disabled on the inspected owned videos, so a
-  dedicated selected video with comments enabled must produce and approve one review draft before
-  the public-reply path can be called live-verified.
+- YouTube Comments has completed live Google OAuth, owner-comment suppression, and one controlled
+  non-owner review-draft and approved-threaded-reply canary on the selected `We Paint!` video.
+  This proves the one-comment happy path only; it is not a broad moderation or safety evaluation.
 - The YouVersion App Key was retried after its owner made it live, but the hosted provider preview
   still could not form a response. The running deployment has been restored to the verified AO Lab
   fallback. The YouVersion adapter therefore still lacks a live passage-retrieval canary.
