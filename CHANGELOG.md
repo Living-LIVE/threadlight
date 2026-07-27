@@ -16,3 +16,5 @@ All notable user-visible changes are documented here. This project follows the s
 ### Changed
 
 - Repository documentation now distinguishes executable features from planned integrations.
+- YouTube comment scans are serialized within a runtime process so overlapping polls cannot create
+  duplicate review drafts for the same comment.

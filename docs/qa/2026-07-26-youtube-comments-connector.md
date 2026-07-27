@@ -79,13 +79,44 @@ Deployment verification passed:
 
 ## Remaining Live Verification
 
-The Google OAuth web client must register these callback URIs before a real account connection:
+Google OAuth connection and a controlled public canary are now complete. The selected `We Paint!`
+video accepted a controlled non-owner comment, a hosted scan created a Gloo/AO review draft, and
+one approved Isaiah 41:10 reply posted through YouTube's threaded-comment API. The runtime
+reported one posted reply. Two duplicate drafts created by overlapping scans were rejected.
 
-```text
-http://127.0.0.1:8787/api/oauth/youtube/callback
-https://threadlight-production.up.railway.app/api/oauth/youtube/callback
+The current source serializes same-process scans and is not yet deployed to Railway. Before any
+further hosted YouTube use, configure `THREADLIGHT_CONTROL_TOKEN` in Railway and deploy the
+current branch. The control token hardening and scan serialization are both in the pending source
+release. A future multi-instance runtime will also need a shared lease to prevent cross-instance
+scan overlap.
+
+## 2026-07-27 Finish-Line Coverage Ledger
+
+| Issue or behavior | Failure mode or acceptance criterion | Direct executable coverage | Focused command | Broader suite | Status |
+| --- | --- | --- | --- | --- | --- |
+| Review-first reply flow | An eligible non-owner comment must create a draft and only post after approval. | `apps/server/src/youtube/connector.test.ts` - `creates one review draft, deduplicates it, and posts only after approval` asserts draft creation, no pre-approval post, and exact threaded-reply payload. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally; one hosted canary passed. |
+| Overlapping scans | Concurrent manual and scheduled scans must not create duplicate drafts. | `apps/server/src/youtube/connector.test.ts` - `serializes overlapping scans so a comment produces only one draft` asserts three concurrent scans make one upstream comment request and one draft. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally; source deployment pending. |
+| Scan recovery | A failed token refresh must not leave the connector permanently locked. | `apps/server/src/youtube/connector.test.ts` - `releases the scan lock after a failed poll so a later scan can recover` asserts the next scan refreshes and completes. | `pnpm vitest run apps/server/src/youtube/connector.test.ts` | `pnpm test` | Passed locally. |
+| Dashboard persistence | Changing reply policy must save before the scan or launch request. | `apps/web/src/youtube-action.test.ts` - `persists reply policy changes before a scan or launch request`. | `pnpm vitest run apps/web/src/youtube-action.test.ts` | `pnpm test` | Passed locally. |
+| Remote operator access | Missing or invalid remote control credentials must be rejected; anonymous remote provider demo must be disabled. | `apps/server/src/control.test.ts` - `requires an operator token for remote control and disables anonymous demos` and `fails closed when a remote control token is not configured`. | `pnpm vitest run apps/server/src/control.test.ts` | `pnpm test` | Passed locally; hosted deployment pending. |
+
+Focused finish-line validation ran:
+
+```bash
+pnpm vitest run \
+  apps/server/src/youtube/connector.test.ts \
+  apps/server/src/control.test.ts \
+  apps/web/src/youtube-action.test.ts \
+  apps/web/src/startup-route.test.ts
+pnpm --filter @threadlight/server typecheck
+pnpm lint
 ```
 
-After registration, use a dedicated test video with comments enabled to run one read-only poll and
-one explicitly approved threaded-reply canary. Do not use an ordinary public comment as the first
-write test.
+All 14 focused tests passed. The browser workflow was also checked locally at
+`http://127.0.0.1:5173`: destination selection opened the YouTube onboarding screen and correctly
+disabled Google connection until local OAuth settings exist. This is a browser proof of the setup
+guard, not an authenticated Google OAuth test.
+
+`pnpm test` is the repository's full deterministic suite and includes every test named in this
+ledger. It was not rerun after the final scan-recovery test because full-suite execution is a
+separate requested gate.

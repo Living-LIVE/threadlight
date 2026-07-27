@@ -12,9 +12,10 @@ deterministic tests, a hosted Google OAuth connection, owner-comment suppression
 controlled non-owner comment on the selected `We Paint!` video. That comment produced a
 Gloo/AO-backed review draft; one owner-approved draft was posted as a threaded reply.
 
-The source now serializes overlapping scans for each deployment. This prevents the duplicate-draft
-race discovered during the hosted canary; the current hosted checkpoint still needs the next source
-release before that production safeguard is active.
+The source now serializes overlapping scans within each runtime process. This prevents the
+duplicate-draft race discovered during the single-instance hosted canary; a future multi-instance
+runtime would need a shared lease. The current hosted checkpoint still needs the next source release
+before this safeguard is active.
 
 ## Product Intent
 

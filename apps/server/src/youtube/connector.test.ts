@@ -158,6 +158,31 @@ describe("YouTubeConnector", () => {
     expect(client.recentCommentsForVideos).toHaveBeenCalledTimes(1);
   });
 
+  it("releases the scan lock after a failed poll so a later scan can recover", async () => {
+    const controlStore = await store();
+    const refresh = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("temporary token failure"))
+      .mockResolvedValue({ accessToken: "access-token", expiresIn: 3600 });
+    const client = {
+      refresh,
+      recentCommentsForVideos: vi.fn(async () => []),
+      reply: vi.fn(async () => undefined),
+    } as unknown as YouTubeClient;
+    const connector = new YouTubeConnector(
+      "11111111-1111-4111-8111-111111111111",
+      controlStore,
+      { respond: vi.fn() } as unknown as ThreadlightOrchestrator,
+      client,
+    );
+
+    await expect(connector.scan()).rejects.toThrow("temporary token failure");
+    await expect(connector.scan()).resolves.toBeUndefined();
+
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(client.recentCommentsForVideos).toHaveBeenCalledTimes(1);
+  });
+
   it("posts an eligible selective reply without creating a draft", async () => {
     const controlStore = await store("selective");
     const reply = vi.fn(async () => undefined);
