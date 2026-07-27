@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
@@ -151,6 +151,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await app.register(cors, {
     origin: options.config.WEB_ORIGIN,
     methods: ["GET", "POST", "PATCH"],
+    allowedHeaders: ["authorization", "content-type"],
+  });
+
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    return payload;
   });
 
   app.get("/api/health", async () => {
@@ -213,6 +222,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const runtimeManager = options.runtimeManager;
   if (controlStore && runtimeManager) {
     const controlRuntimeFactory = options.controlRuntimeFactory ?? createControlRuntime;
+    app.addHook("onRequest", async (request, reply) => {
+      if (!isProtectedControlRoute(request.url) || !requiresRemoteControlToken(options.config))
+        return;
+      const token = options.config.THREADLIGHT_CONTROL_TOKEN;
+      if (!token) {
+        return reply.code(503).send({
+          error: "control_access_not_configured",
+          message: "Remote control requires THREADLIGHT_CONTROL_TOKEN.",
+        });
+      }
+      if (!hasControlToken(request.headers.authorization, token)) {
+        return reply.code(401).send({
+          error: "control_access_required",
+          message: "An operator access code is required.",
+        });
+      }
+    });
     app.get("/api/control/status", async () => {
       const config = await controlStore.load();
       const runtime = await runtimeManager.status();
@@ -614,6 +640,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }));
 
   app.post("/api/demo/respond", async (request, reply) => {
+    if (requiresRemoteControlToken(options.config) && !options.config.THREADLIGHT_DEMO_ENABLED) {
+      return reply.code(404).send({ error: "not_found" });
+    }
     const clientId = request.ip;
     if (!limiter.take(clientId)) {
       return reply.code(429).send({
@@ -713,6 +742,23 @@ function youtubeOAuthConfig(
 
 function youtubeCallbackUrl(config: ThreadlightConfig) {
   return `${config.THREADLIGHT_PUBLIC_URL}/api/oauth/youtube/callback`;
+}
+
+function isProtectedControlRoute(url: string) {
+  return url.startsWith("/api/control/") || url.startsWith("/api/oauth/youtube/start");
+}
+
+function requiresRemoteControlToken(config: ThreadlightConfig) {
+  const hostname = new URL(config.THREADLIGHT_PUBLIC_URL).hostname;
+  return !["127.0.0.1", "::1", "localhost"].includes(hostname);
+}
+
+function hasControlToken(authorization: string | undefined, expected: string) {
+  const candidate = authorization?.match(/^Bearer (.+)$/i)?.[1];
+  if (!candidate) return false;
+  const supplied = Buffer.from(candidate);
+  const required = Buffer.from(expected);
+  return supplied.length === required.length && timingSafeEqual(supplied, required);
 }
 
 class MemoryRateLimiter {

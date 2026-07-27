@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import {
   cloneElement,
+  createContext,
   type FormEvent,
   isValidElement,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -135,6 +137,12 @@ const descriptions: Record<DestinationKind, string> = {
 
 const apiOrigin = (import.meta.env.VITE_THREADLIGHT_API_ORIGIN ?? "").replace(/\/$/, "");
 
+type ControlRequest = <T>(url: string, init?: RequestInit) => Promise<T>;
+
+const ControlRequestContext = createContext<ControlRequest | undefined>(undefined);
+
+class ControlAccessRequiredError extends Error {}
+
 function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
   const pendingDrafts = youtube.drafts.filter((draft) => draft.status === "pending").length;
   const parts = [
@@ -146,19 +154,31 @@ function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
   return parts.join(" · ");
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+async function request<T>(url: string, init?: RequestInit, controlAccessCode?: string): Promise<T> {
   const response = await fetch(`${apiOrigin}${url}`, {
     ...init,
     headers: {
       ...(init?.body === undefined ? {} : { "content-type": "application/json" }),
+      ...(controlAccessCode ? { authorization: `Bearer ${controlAccessCode}` } : {}),
       ...init?.headers,
     },
   });
+  const body = (await response.json().catch(() => undefined)) as
+    | { error?: string; message?: string }
+    | undefined;
   if (!response.ok) {
-    const body = (await response.json().catch(() => undefined)) as { message?: string } | undefined;
+    if (response.status === 401 && body?.error === "control_access_required") {
+      throw new ControlAccessRequiredError();
+    }
     throw new Error(body?.message ?? "Threadlight could not save that change.");
   }
-  return (await response.json()) as T;
+  return body as T;
+}
+
+function useControlRequest() {
+  const request = useContext(ControlRequestContext);
+  if (!request) throw new Error("Threadlight control is unavailable.");
+  return request;
 }
 
 export function App() {
@@ -169,12 +189,19 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [controlAccessCode, setControlAccessCode] = useState("");
+  const [accessRequired, setAccessRequired] = useState(false);
+
+  const controlRequest = useCallback<ControlRequest>(
+    (url, init) => request(url, init, controlAccessCode),
+    [controlAccessCode],
+  );
 
   const refresh = useCallback(async () => {
-    const next = await request<ControlStatus>("/api/control/status");
+    const next = await controlRequest<ControlStatus>("/api/control/status");
     setStatus(next);
     return next;
-  }, []);
+  }, [controlRequest]);
 
   useEffect(() => {
     void refresh()
@@ -191,9 +218,13 @@ export function App() {
         if (route.notice) setError(route.notice);
         if (youtubeResult) window.history.replaceState({}, "", window.location.pathname);
       })
-      .catch((reason: unknown) =>
-        setError(reason instanceof Error ? reason.message : "Unable to reach Threadlight."),
-      );
+      .catch((reason: unknown) => {
+        if (reason instanceof ControlAccessRequiredError) {
+          setAccessRequired(true);
+          return;
+        }
+        setError(reason instanceof Error ? reason.message : "Unable to reach Threadlight.");
+      });
   }, [refresh]);
 
   const selected = useMemo(
@@ -201,11 +232,23 @@ export function App() {
     [selectedId, status],
   );
 
+  if (!status && accessRequired) {
+    return (
+      <AccessCode
+        onSubmit={(value) => {
+          setError(undefined);
+          setAccessRequired(false);
+          setControlAccessCode(value);
+        }}
+      />
+    );
+  }
+
   const createDeployment = async (kind: DestinationKind) => {
     setBusy(true);
     setError(undefined);
     try {
-      const created = await request<{ id: string }>("/api/control/deployments", {
+      const created = await controlRequest<{ id: string }>("/api/control/deployments", {
         method: "POST",
         body: JSON.stringify({ kind }),
       });
@@ -237,67 +280,102 @@ export function App() {
     );
 
   return (
-    <main className="app-shell">
-      <Header onSettings={() => setScreen("settings")} />
-      {error && <Notice text={error} />}
-      {screen === "choose" && (
-        <ChooseDestination catalog={status.catalog} busy={busy} onChoose={createDeployment} />
-      )}
-      {screen === "connect" && selected && (
-        <ConnectDestination
-          deployment={selected}
-          youtubeOAuthConfigured={status.youtubeOAuthConfigured}
-          onBack={() => setScreen("choose")}
-          onContinue={() => setScreen("launch")}
-          onSaved={refresh}
-          onError={setError}
-        />
-      )}
-      {screen === "launch" && selected && (
-        <ConfigureAndLaunch
-          deployment={selected}
-          initialProvider={status.configuration.providers.ai}
-          initialScripture={status.configuration.providers.scripture}
-          onBack={() => setScreen("connect")}
-          onLaunched={async () => {
-            await refresh();
-            setScreen("home");
-          }}
-          onError={setError}
-        />
-      )}
-      {screen === "home" && (
-        <LiveDashboard
-          status={status}
-          onAdd={() => {
-            setSelectedId(undefined);
-            setScreen("choose");
-          }}
-          onOpen={openDeployment}
-          onPause={async (id) => {
-            try {
-              await request(`/api/control/deployments/${id}/pause`, { method: "POST" });
+    <ControlRequestContext.Provider value={controlRequest}>
+      <main className="app-shell">
+        <Header onSettings={() => setScreen("settings")} />
+        {error && <Notice text={error} />}
+        {screen === "choose" && (
+          <ChooseDestination catalog={status.catalog} busy={busy} onChoose={createDeployment} />
+        )}
+        {screen === "connect" && selected && (
+          <ConnectDestination
+            deployment={selected}
+            youtubeOAuthConfigured={status.youtubeOAuthConfigured}
+            onBack={() => setScreen("choose")}
+            onContinue={() => setScreen("launch")}
+            onSaved={refresh}
+            onError={setError}
+          />
+        )}
+        {screen === "launch" && selected && (
+          <ConfigureAndLaunch
+            deployment={selected}
+            initialProvider={status.configuration.providers.ai}
+            initialScripture={status.configuration.providers.scripture}
+            onBack={() => setScreen("connect")}
+            onLaunched={async () => {
               await refresh();
-            } catch (reason) {
-              setError(
-                reason instanceof Error ? reason.message : "Unable to pause this destination.",
-              );
-            }
+              setScreen("home");
+            }}
+            onError={setError}
+          />
+        )}
+        {screen === "home" && (
+          <LiveDashboard
+            status={status}
+            onAdd={() => {
+              setSelectedId(undefined);
+              setScreen("choose");
+            }}
+            onOpen={openDeployment}
+            onPause={async (id) => {
+              try {
+                await controlRequest(`/api/control/deployments/${id}/pause`, { method: "POST" });
+                await refresh();
+              } catch (reason) {
+                setError(
+                  reason instanceof Error ? reason.message : "Unable to pause this destination.",
+                );
+              }
+            }}
+          />
+        )}
+        {screen === "settings" && (
+          <SettingsPanel
+            initialProvider={status.configuration.providers.ai}
+            initialScripture={status.configuration.providers.scripture}
+            onBack={() => setScreen(status.configuration.deployments.length ? "home" : "choose")}
+            onSaved={async () => {
+              await refresh();
+              setScreen("home");
+            }}
+            onError={setError}
+          />
+        )}
+      </main>
+    </ControlRequestContext.Provider>
+  );
+}
+
+function AccessCode({ onSubmit }: { onSubmit: (value: string) => void }) {
+  const [value, setValue] = useState("");
+  return (
+    <main className="app-shell">
+      <Header onSettings={() => undefined} />
+      <section className="wizard narrow">
+        <p className="eyebrow">Operator access</p>
+        <h1>Enter your access code.</h1>
+        <p className="lede">This remotely hosted Threadlight control surface is private.</p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (value.trim()) onSubmit(value.trim());
           }}
-        />
-      )}
-      {screen === "settings" && (
-        <SettingsPanel
-          initialProvider={status.configuration.providers.ai}
-          initialScripture={status.configuration.providers.scripture}
-          onBack={() => setScreen(status.configuration.deployments.length ? "home" : "choose")}
-          onSaved={async () => {
-            await refresh();
-            setScreen("home");
-          }}
-          onError={setError}
-        />
-      )}
+        >
+          <Field label="Access code">
+            <input
+              type="password"
+              autoComplete="off"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder="Enter operator access code"
+            />
+          </Field>
+          <button className="primary" type="submit" disabled={!value.trim()}>
+            Continue <ArrowRight size={17} />
+          </button>
+        </form>
+      </section>
     </main>
   );
 }
@@ -453,6 +531,7 @@ function DiscordConnection({
   onSaved: () => Promise<unknown>;
   onError: (value: string) => void;
 }) {
+  const request = useControlRequest();
   const [form, setForm] = useState({ applicationId: "", botToken: "", guildId: "", channelId: "" });
   const [saving, setSaving] = useState(false);
   const saved = deployment.discord;
@@ -559,6 +638,7 @@ function YouTubeConnection({
   onSaved: () => Promise<unknown>;
   onError: (value: string) => void;
 }) {
+  const request = useControlRequest();
   const saved = deployment.youtube;
   const [replyMode, setReplyMode] = useState(saved?.replyMode ?? "review");
   const [pollSeconds, setPollSeconds] = useState(String(saved?.pollSeconds ?? 180));
@@ -594,7 +674,7 @@ function YouTubeConnection({
     return () => {
       cancelled = true;
     };
-  }, [connected, deployment.id, onError]);
+  }, [connected, deployment.id, onError, request]);
   const save = async () => {
     const available = new Map(
       [...videos, ...(saved?.selectedVideos ?? [])].map((video) => [video.id, video]),
@@ -861,6 +941,7 @@ function ConfigureAndLaunch({
   onLaunched: () => Promise<void>;
   onError: (value: string) => void;
 }) {
+  const request = useControlRequest();
   const [provider, setProvider] = useState<Provider>(initialProvider.provider);
   const [model, setModel] = useState(initialProvider.model);
   const [apiKey, setApiKey] = useState("");
@@ -1053,6 +1134,7 @@ function SettingsPanel({
   onSaved: () => Promise<void>;
   onError: (value: string) => void;
 }) {
+  const request = useControlRequest();
   const [provider, setProvider] = useState<Provider>(initialProvider.provider);
   const [model, setModel] = useState(initialProvider.model);
   const [credential, setCredential] = useState("");
@@ -1229,6 +1311,7 @@ function LiveDashboard({
   onOpen: (deployment: Deployment) => void;
   onPause: (id: string) => Promise<void>;
 }) {
+  const request = useControlRequest();
   const [prompt, setPrompt] = useState(
     "I feel overwhelmed today. Could you offer a brief reflection?",
   );

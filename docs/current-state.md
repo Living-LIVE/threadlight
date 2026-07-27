@@ -51,8 +51,10 @@ not be described as available in demos, issues, or release notes.
 - The YouVersion App Key was retried after its owner made it live, but the hosted provider preview
   still could not form a response. The running deployment has been restored to the verified AO Lab
   fallback. The YouVersion adapter therefore still lacks a live passage-retrieval canary.
-- Docker binds to loopback by default. Remote exposure requires an authenticated proxy owned by
-  the operator.
+- Docker binds to loopback by default. Remote control requires `THREADLIGHT_CONTROL_TOKEN` and
+  should also sit behind an authenticated proxy owned by the operator. The current hosted
+  checkpoint must receive that token and this security release before it can be described as a
+  protected remote operator surface.
 - The current Docker image passed an exact-source build and isolated container health/control API
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 

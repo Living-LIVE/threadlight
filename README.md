@@ -59,7 +59,11 @@ poller itself.
 The included `vercel.json` builds `apps/web` as that optional dashboard. Set
 `VITE_THREADLIGHT_API_ORIGIN` to the HTTPS Railway or self-hosted service URL before deploying it,
 then set the runtime's `WEB_ORIGIN` to the Vercel deployment URL so browser requests and OAuth
-returns use the same operator surface.
+returns use the same operator surface. A remote runtime also requires a 32-byte-or-longer
+`THREADLIGHT_CONTROL_TOKEN`; generate it with `openssl rand -hex 32`, configure it only in the
+runtime environment, and enter it in the dashboard when prompted. The access code stays only in
+the browser's current memory and is never bundled into the Vercel build. Anonymous remote demo
+requests remain disabled unless `THREADLIGHT_DEMO_ENABLED=true` is deliberately configured.
 
 ### Local Development
 
@@ -81,7 +85,8 @@ to bootstrap existing local values:
 cp .env.example .env.local
 ```
 
-Never commit `.env.local`, Docker volumes, or `.threadlight/` configuration files.
+Never commit `.env.local`, Docker volumes, `.threadlight/` configuration files, browser-capture
+artifacts, or operator access codes.
 
 ### YouTube Comments
 

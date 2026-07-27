@@ -19,6 +19,10 @@ redacted example. Allow maintainers time to investigate before public disclosure
 ## Operator Guidance
 
 - Keep the control surface bound to loopback unless an authenticated reverse proxy protects it.
+- Set `THREADLIGHT_CONTROL_TOKEN` before using a non-loopback `THREADLIGHT_PUBLIC_URL`; do not
+  place that value in `VITE_*`, source files, or a static dashboard deployment.
+- Leave `THREADLIGHT_DEMO_ENABLED` disabled on remote runtimes unless you have an abuse-control
+  plan for provider-backed demo requests.
 - Do not share `.env.local`, Docker volumes, or `.threadlight/` data.
 - Use least-privilege Discord permissions and restrict the bot to intended channels.
 - Rotate any credential that is accidentally exposed.

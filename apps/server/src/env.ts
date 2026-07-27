@@ -15,6 +15,9 @@ const ConfigSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(8787),
   WEB_ORIGIN: z.string().url().default("http://localhost:5173"),
   THREADLIGHT_PUBLIC_URL: z.string().url().default("http://127.0.0.1:8787"),
+  // Remote control surfaces require this token. Loopback-only installations remain passwordless.
+  THREADLIGHT_CONTROL_TOKEN: z.string().trim().min(32).optional(),
+  THREADLIGHT_DEMO_ENABLED: booleanFromEnv(false),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   THREADLIGHT_CONFIG_PATH: z.string().min(1).default(".threadlight/config.json"),
   AI_PROVIDER: z.enum(["openai", "gemini", "gloo", "bonfire", "fixture"]).default("openai"),

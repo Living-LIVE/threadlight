@@ -57,7 +57,10 @@ Threadlight is message-stateless:
 The liveness endpoint reports whether the process can serve requests. The readiness endpoint
 retains the legacy environment bootstrap status. `/api/control/status` reports the local route
 catalog, sanitized provider state, deployment state, and runtime health. Control APIs accept
-credentials write-only and never return them to the browser.
+credentials write-only and never return them to the browser. When `THREADLIGHT_PUBLIC_URL` is not
+loopback, every control API and the YouTube OAuth-start endpoint require a bearer operator token;
+the OAuth callback remains state-signed for Google redirects. Remote anonymous demo requests are
+off unless explicitly enabled.
 
 ### Hosted Topology
 
@@ -66,7 +69,9 @@ YouTube poller require a long-lived connection and scheduled work. Railway is th
 runtime checkpoint. A Vercel deployment can only be a separately configured static/operator UI;
 it must use an explicit API origin for the persistent Threadlight service and cannot replace the
 gateway or poller process. `VITE_THREADLIGHT_API_ORIGIN` configures the Vercel UI, while the
-runtime's `WEB_ORIGIN` must be the Vercel URL for CORS and OAuth redirects.
+runtime's `WEB_ORIGIN` must be the Vercel URL for CORS and OAuth redirects. The remote runtime
+also needs `THREADLIGHT_CONTROL_TOKEN`; the dashboard requests that code at runtime and retains it
+only in memory. It is never a `VITE_*` variable and never belongs in the static deployment.
 
 ### Web
 
@@ -96,6 +101,7 @@ translation, attribution, and source metadata.
 ## Operator Boundary
 
 Configuration is normally supplied through the local operator UI and persisted in a Docker
-volume. `.env.local` is an optional first-start bootstrap path. The browser submits credentials
-only to local write-only APIs and receives sanitized status. Docker binds the control surface to
-loopback by default; any remote exposure must be protected by an operator-authenticated proxy.
+volume. `.env.local` is an optional first-start bootstrap path. The browser submits credentials to
+write-only APIs and receives sanitized status. Docker binds the control surface to loopback by
+default. Remote exposure is protected by the operator token boundary and should also sit behind an
+operator-authenticated proxy.

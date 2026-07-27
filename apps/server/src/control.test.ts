@@ -222,4 +222,85 @@ describe("local control configuration", () => {
       await app.close();
     }
   });
+
+  it("requires an operator token for remote control and disables anonymous demos", async () => {
+    const store = await createStore();
+    const controlToken = "t".repeat(32);
+    const config = loadConfig({
+      NODE_ENV: "test",
+      THREADLIGHT_PUBLIC_URL: "https://threadlight.example.test",
+      THREADLIGHT_CONTROL_TOKEN: controlToken,
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: new ThreadlightRuntimeManager(store),
+      logger: false,
+    });
+
+    try {
+      const missingToken = await app.inject({ method: "GET", url: "/api/control/status" });
+      expect(missingToken.statusCode).toBe(401);
+      expect(missingToken.json()).toMatchObject({ error: "control_access_required" });
+
+      const invalidToken = await app.inject({
+        method: "GET",
+        url: "/api/control/status",
+        headers: { authorization: "Bearer wrong-token" },
+      });
+      expect(invalidToken.statusCode).toBe(401);
+
+      const authorized = await app.inject({
+        method: "GET",
+        url: "/api/control/status",
+        headers: { authorization: `Bearer ${controlToken}` },
+      });
+      expect(authorized.statusCode).toBe(200);
+
+      const demo = await app.inject({
+        method: "POST",
+        url: "/api/demo/respond",
+        payload: { scenarioId: "grief", messages: [], prompt: "Test" },
+      });
+      expect(demo.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("fails closed when a remote control token is not configured", async () => {
+    const store = await createStore();
+    const config = loadConfig({
+      NODE_ENV: "test",
+      THREADLIGHT_PUBLIC_URL: "https://threadlight.example.test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: new ThreadlightRuntimeManager(store),
+      logger: false,
+    });
+
+    try {
+      const response = await app.inject({ method: "GET", url: "/api/control/status" });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ error: "control_access_not_configured" });
+    } finally {
+      await app.close();
+    }
+  });
 });

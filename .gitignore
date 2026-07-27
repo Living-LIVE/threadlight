@@ -11,3 +11,4 @@ output/
 .DS_Store
 .threadlight/
 .vercel
+.playwright-cli/
