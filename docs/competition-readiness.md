@@ -10,8 +10,10 @@ attributed-passage canary is verified. A working YouVersion key and visible attr
 canary remain a follow-up before claiming a live YouVersion integration in the submission.
 
 The credential-free reference notebook lives at `notebook/threadlight_demo.ipynb`. It calls the
-same public API used by the web experience and exposes the judged decision, passage attribution,
-provider trace, and safety stages without embedding secrets.
+same public curated-scenario API used by the web experience and exposes the judged decision,
+passage attribution, provider trace, and safety stages without embedding secrets. It must still be
+published as a **public Kaggle notebook** and attached to the Kaggle writeup; committing it to
+GitHub alone does not create that Kaggle resource.
 
 Run:
 
