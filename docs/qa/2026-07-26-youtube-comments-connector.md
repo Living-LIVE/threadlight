@@ -120,3 +120,16 @@ guard, not an authenticated Google OAuth test.
 `pnpm test` is the repository's full deterministic suite and includes every test named in this
 ledger. It was not rerun after the final scan-recovery test because full-suite execution is a
 separate requested gate.
+
+## Public Preview Contract
+
+The hosted dashboard can be viewed without a login. Its public preview exposes only curated
+scenarios and the bounded `/api/demo/respond` route when `THREADLIGHT_DEMO_ENABLED=true` is
+deliberately configured. Remote configuration, deployment control, OAuth start, review drafts,
+and reply posting remain behind `THREADLIGHT_CONTROL_TOKEN`.
+
+The local browser proof used an isolated remote-mode fixture runtime: the public preview loaded
+without an access code, returned an attributed Psalm 34:18 fixture response, and moved to the
+operator access-code screen only after selecting **Manage this Threadlight**. The server test
+`allows a bounded public demo without exposing remote control` covers the same boundary, including
+rejection of arbitrary prompt text and unknown scenarios.

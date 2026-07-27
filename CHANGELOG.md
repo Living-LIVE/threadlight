@@ -12,6 +12,8 @@ All notable user-visible changes are documented here. This project follows the s
 - Discord participation modes and provider-neutral adapter boundaries.
 - YouTube Comments destination with Google OAuth setup, owned-channel discovery, polling,
   review drafts, selective replies, and explicit threaded-reply approval.
+- A no-login public preview with curated, server-owned conversation scenarios. Operator
+  configuration, OAuth, review drafts, and posting controls remain access-code protected.
 
 ### Changed
 

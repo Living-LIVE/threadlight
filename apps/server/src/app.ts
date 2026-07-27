@@ -21,25 +21,11 @@ import { createControlRuntime } from "./runtime.js";
 import type { ThreadlightRuntimeManager } from "./runtime-manager.js";
 import { signOAuthState, verifyOAuthState, YouTubeClient } from "./youtube/index.js";
 
-const AuthorSchema = z.object({
-  id: z.string().min(1).max(120),
-  name: z.string().min(1).max(80),
-  avatarUrl: z.string().url().optional(),
-  isAgent: z.boolean().optional(),
-});
-
-const MessageSchema = z.object({
-  id: z.string().min(1).max(120),
-  author: AuthorSchema,
-  content: z.string().min(1).max(2_000),
-  createdAt: z.string().datetime(),
-});
-
-const DemoRequestSchema = z.object({
-  scenarioId: z.string().min(1).max(80),
-  messages: z.array(MessageSchema).max(30),
-  prompt: z.string().min(1).max(2_000),
-});
+const DemoRequestSchema = z
+  .object({
+    scenarioId: z.string().min(1).max(80),
+  })
+  .strict();
 
 type BuildAppOptions = {
   config: ThreadlightConfig;
@@ -145,7 +131,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       (options.config.NODE_ENV === "test" ? false : { level: options.config.LOG_LEVEL }),
     bodyLimit: 64 * 1024,
   });
-  const limiter = new MemoryRateLimiter(20, 60_000);
+  const controlPreviewLimiter = new MemoryRateLimiter(20, 60_000);
+  const publicDemoLimiter = new MemoryRateLimiter(5, 60_000);
   const youtube = new YouTubeClient();
 
   await app.register(cors, {
@@ -278,7 +265,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           .code(400)
           .send({ error: "invalid_request", message: "Enter a message for the test response." });
       }
-      if (!limiter.take(request.ip)) {
+      if (!controlPreviewLimiter.take(request.ip)) {
         return reply.code(429).send({
           error: "rate_limited",
           message: "Threadlight needs a moment before another test response.",
@@ -644,7 +631,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(404).send({ error: "not_found" });
     }
     const clientId = request.ip;
-    if (!limiter.take(clientId)) {
+    if (!publicDemoLimiter.take(clientId)) {
       return reply.code(429).send({
         error: "rate_limited",
         message: "Threadlight needs a moment before another response.",
@@ -659,18 +646,24 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       });
     }
 
+    const scenario = DEMO_SCENARIOS.find((candidate) => candidate.id === parsed.data.scenarioId);
+    if (!scenario) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        message: "Choose one of the available preview scenarios.",
+      });
+    }
+
     try {
       const result = await options.orchestrator.respond({
         context: {
-          channelId: `demo:${parsed.data.scenarioId}`,
-          roomName:
-            DEMO_SCENARIOS.find((scenario) => scenario.id === parsed.data.scenarioId)?.roomName ??
-            "Threadlight Demo",
-          messages: parsed.data.messages,
+          channelId: `demo:${scenario.id}`,
+          roomName: scenario.roomName,
+          messages: scenario.messages,
         },
-        prompt: parsed.data.prompt,
+        prompt: scenario.suggestedPrompt,
         source: "demo",
-        intent: parsed.data.scenarioId === "prayer" ? "prayer" : "reflection",
+        intent: scenario.id === "prayer" ? "prayer" : "reflection",
       });
 
       return {

@@ -119,6 +119,20 @@ type ControlPreview = {
   trace: { aiProvider: string; scriptureProvider: string; totalMs: number };
 };
 
+type DemoScenario = {
+  id: string;
+  label: string;
+  summary: string;
+  roomName: string;
+  suggestedPrompt: string;
+  messages: Array<{
+    id: string;
+    author: { id: string; name: string };
+    content: string;
+    createdAt: string;
+  }>;
+};
+
 const icons = {
   discord: MessageCircle,
   slack: MessageCircle,
@@ -191,6 +205,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [controlAccessCode, setControlAccessCode] = useState("");
   const [accessRequired, setAccessRequired] = useState(false);
+  const [showOperatorAccess, setShowOperatorAccess] = useState(false);
 
   const controlRequest = useCallback<ControlRequest>(
     (url, init) => request(url, init, controlAccessCode),
@@ -233,6 +248,7 @@ export function App() {
   );
 
   if (!status && accessRequired) {
+    if (!showOperatorAccess) return <PublicDemo onManage={() => setShowOperatorAccess(true)} />;
     return (
       <AccessCode
         onSubmit={(value) => {
@@ -240,6 +256,7 @@ export function App() {
           setAccessRequired(false);
           setControlAccessCode(value);
         }}
+        onPreview={() => setShowOperatorAccess(false)}
       />
     );
   }
@@ -347,7 +364,13 @@ export function App() {
   );
 }
 
-function AccessCode({ onSubmit }: { onSubmit: (value: string) => void }) {
+function AccessCode({
+  onSubmit,
+  onPreview,
+}: {
+  onSubmit: (value: string) => void;
+  onPreview: () => void;
+}) {
   const [value, setValue] = useState("");
   return (
     <main className="app-shell">
@@ -375,12 +398,21 @@ function AccessCode({ onSubmit }: { onSubmit: (value: string) => void }) {
             Continue <ArrowRight size={17} />
           </button>
         </form>
+        <button className="text-button" type="button" onClick={onPreview}>
+          Back to public preview
+        </button>
       </section>
     </main>
   );
 }
 
-function Header({ onSettings }: { onSettings: () => void }) {
+function Header({
+  onSettings,
+  context = "Local control",
+}: {
+  onSettings: () => void;
+  context?: string;
+}) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -390,13 +422,128 @@ function Header({ onSettings }: { onSettings: () => void }) {
       <div className="topbar-actions">
         <span className="local-state">
           <i />
-          Local control
+          {context}
         </span>
         <button className="icon-button" type="button" onClick={onSettings} aria-label="Settings">
           <Settings2 size={18} />
         </button>
       </div>
     </header>
+  );
+}
+
+function PublicDemo({ onManage }: { onManage: () => void }) {
+  const [scenarios, setScenarios] = useState<DemoScenario[]>([]);
+  const [selectedId, setSelectedId] = useState<string>();
+  const [preview, setPreview] = useState<ControlPreview>();
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void request<{ scenarios: DemoScenario[] }>("/api/demo/scenarios")
+      .then((result) => {
+        if (cancelled) return;
+        setScenarios(result.scenarios);
+        setSelectedId(result.scenarios[0]?.id);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled)
+          setError(reason instanceof Error ? reason.message : "Unable to load the public preview.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selected = scenarios.find((scenario) => scenario.id === selectedId);
+  const run = async () => {
+    if (!selected) return;
+    setRunning(true);
+    setError(undefined);
+    try {
+      const result = await request<ControlPreview>("/api/demo/respond", {
+        method: "POST",
+        body: JSON.stringify({
+          scenarioId: selected.id,
+        }),
+      });
+      setPreview(result);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Threadlight could not form a response.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <main className="app-shell">
+      <Header onSettings={onManage} context="Public preview" />
+      <section className="wizard demo-panel">
+        <p className="eyebrow">Interactive preview</p>
+        <h1>See Threadlight in a real conversation.</h1>
+        <p className="lede">
+          Choose a community moment, then ask Threadlight for a brief, Scripture-grounded response.
+        </p>
+        {loading && <p className="status-note">Loading preview scenarios...</p>}
+        {error && <Notice text={error} />}
+        {scenarios.length > 0 && (
+          <fieldset className="scenario-list" aria-label="Preview scenarios">
+            {scenarios.map((scenario) => (
+              <button
+                className={`scenario-card ${scenario.id === selectedId ? "selected" : ""}`}
+                type="button"
+                key={scenario.id}
+                onClick={() => {
+                  setSelectedId(scenario.id);
+                  setPreview(undefined);
+                }}
+                aria-pressed={scenario.id === selectedId}
+              >
+                <strong>{scenario.label}</strong>
+                <small>{scenario.summary}</small>
+              </button>
+            ))}
+          </fieldset>
+        )}
+        {selected && (
+          <article className="demo-conversation">
+            <small className="draft-label">{selected.roomName}</small>
+            {selected.messages.map((message) => (
+              <p key={message.id}>
+                <strong>{message.author.name}</strong> {message.content}
+              </p>
+            ))}
+          </article>
+        )}
+        <button
+          className="primary"
+          type="button"
+          onClick={() => void run()}
+          disabled={!selected || running}
+        >
+          <Sparkles size={17} /> {running ? "Reflecting..." : "Try Threadlight"}
+        </button>
+        {preview?.reply && (
+          <article className="demo-response">
+            <small className="draft-label">Threadlight</small>
+            <p>{preview.reply.message}</p>
+            {preview.reply.passage && (
+              <small>
+                {preview.reply.passage.reference} · {preview.reply.passage.translation}
+              </small>
+            )}
+          </article>
+        )}
+        <button className="text-button operator-link" type="button" onClick={onManage}>
+          Manage this Threadlight <ArrowRight size={16} />
+        </button>
+      </section>
+    </main>
   );
 }
 

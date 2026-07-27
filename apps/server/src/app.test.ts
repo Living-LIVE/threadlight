@@ -165,8 +165,6 @@ describe("Threadlight API", () => {
       url: "/api/demo/respond",
       payload: {
         scenarioId: scenario.id,
-        messages: scenario.messages,
-        prompt: scenario.suggestedPrompt,
       },
     });
 

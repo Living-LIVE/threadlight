@@ -24,6 +24,9 @@ hosted multi-tenant service.
 - A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
   operator dashboard through `VITE_THREADLIGHT_API_ORIGIN`; it is not a replacement for the
   persistent gateway and poller runtime.
+- A no-login public preview that shows curated conversation scenarios and, when the operator
+  deliberately enables the bounded demo endpoint, can run a live reflection without exposing
+  Threadlight configuration or deployment controls.
 - A provider-neutral core so channel and provider adapters can be added without coupling them to
   the dashboard.
 
@@ -54,7 +57,8 @@ not be described as available in demos, issues, or release notes.
 - Docker binds to loopback by default. Remote control requires `THREADLIGHT_CONTROL_TOKEN` and
   should also sit behind an authenticated proxy owned by the operator. The current hosted
   checkpoint must receive that token and this security release before it can be described as a
-  protected remote operator surface.
+  protected remote operator surface. The public preview remains intentionally available without
+  that code; its live-response endpoint requires `THREADLIGHT_DEMO_ENABLED=true`.
 - The current Docker image passed an exact-source build and isolated container health/control API
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 

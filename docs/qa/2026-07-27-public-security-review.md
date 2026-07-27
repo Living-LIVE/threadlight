@@ -31,12 +31,15 @@ an exposure until that configuration and deployment occur.
 
 **Location:** `apps/server/src/app.ts` `/api/demo/respond`.
 
-**Evidence:** The endpoint accepts arbitrary bounded prompts and invokes the configured
-orchestrator. Its in-memory IP limiter is not a durable abuse boundary on a hosted runtime.
+**Evidence:** An earlier draft of the endpoint accepted arbitrary bounded prompts and invoked the
+configured orchestrator. Its in-memory IP limiter is not a durable abuse boundary on a hosted
+runtime.
 
 **Fix in source:** Remote demo requests return `404` unless
-`THREADLIGHT_DEMO_ENABLED=true` is explicitly configured. Loopback development remains available
-for the credential-free notebook flow.
+`THREADLIGHT_DEMO_ENABLED=true` is explicitly configured. When enabled, the route accepts only a
+known scenario ID; the server owns the prompt and conversation messages. It is independently
+limited to five responses per IP per minute. Loopback development remains available for the
+credential-free notebook flow.
 
 ### TL-SEC-003 - Low - Public dashboard lacked explicit browser hardening headers
 

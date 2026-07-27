@@ -98,6 +98,9 @@ select:focus-visible {
 .wizard.narrow {
   width: min(100%, 700px);
 }
+.demo-panel {
+  width: min(100%, 820px);
+}
 .form-wizard {
   width: min(100%, 760px);
 }
@@ -146,6 +149,59 @@ h2 {
 }
 .route-list {
   border-top: 1px solid #e5e8e5;
+}
+.scenario-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 18px;
+  border: 0;
+  padding: 0;
+}
+.scenario-card {
+  border: 1px solid #e5e8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  padding: 16px;
+  text-align: left;
+}
+.scenario-card:hover,
+.scenario-card.selected {
+  border-color: #28766e;
+  background: #eef7f4;
+}
+.scenario-card strong,
+.scenario-card small {
+  display: block;
+}
+.scenario-card small {
+  margin-top: 5px;
+  color: #68716f;
+  line-height: 1.45;
+}
+.demo-conversation,
+.demo-response {
+  max-width: 680px;
+  margin: 20px 0;
+  border-left: 3px solid #28766e;
+  padding: 4px 0 4px 16px;
+}
+.demo-conversation p,
+.demo-response p {
+  margin: 8px 0;
+  line-height: 1.55;
+}
+.demo-response {
+  border-radius: 0 8px 8px 0;
+  background: #eef7f4;
+  padding: 16px;
+}
+.operator-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
 }
 .route-row {
   width: 100%;
@@ -578,6 +634,9 @@ textarea:focus {
   }
   .field-grid,
   .mode-row {
+    grid-template-columns: 1fr;
+  }
+  .scenario-list {
     grid-template-columns: 1fr;
   }
   .dashboard {
