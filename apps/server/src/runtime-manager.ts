@@ -48,6 +48,8 @@ export class ThreadlightRuntimeManager {
   private youtube?: YouTubeRuntime;
   private activeId?: string;
   private youtubeId?: string;
+  private activeFingerprint?: string;
+  private youtubeFingerprint?: string;
   private statuses = new Map<string, DeploymentRuntimeStatus>();
   private errors = new Map<string, string>();
   private readonly createGateway: NonNullable<RuntimeManagerDependencies["createGateway"]>;
@@ -115,7 +117,16 @@ export class ThreadlightRuntimeManager {
       return;
     }
 
-    if (this.gateway && this.activeId === active.id && this.gateway.ready) {
+    const activeFingerprint = JSON.stringify({
+      providers: config.providers,
+      discord: active.discord,
+    });
+    if (
+      this.gateway &&
+      this.activeId === active.id &&
+      this.gateway.ready &&
+      this.activeFingerprint === activeFingerprint
+    ) {
       this.errors.delete(active.id);
       this.refreshStatuses(config);
       return;
@@ -136,6 +147,7 @@ export class ThreadlightRuntimeManager {
       runtime,
     );
     this.activeId = active.id;
+    this.activeFingerprint = activeFingerprint;
 
     try {
       if (discord.registerCommands) {
@@ -215,6 +227,7 @@ export class ThreadlightRuntimeManager {
     await this.gateway?.stop();
     this.gateway = undefined;
     this.activeId = undefined;
+    this.activeFingerprint = undefined;
   }
 
   private async reconcileYouTube(config: LocalControlConfig) {
@@ -231,10 +244,20 @@ export class ThreadlightRuntimeManager {
       !["ao", "youversion"].includes(config.providers.scripture.provider)
     )
       return;
-    if (this.youtube && this.youtubeId === active.id) return;
+    const youtubeFingerprint = JSON.stringify({
+      providers: config.providers,
+      youtube: active.youtube,
+    });
+    if (
+      this.youtube &&
+      this.youtubeId === active.id &&
+      this.youtubeFingerprint === youtubeFingerprint
+    )
+      return;
     await this.stopYouTube();
     this.youtube = this.createYouTube(active.id, this.store, createControlRuntime(config));
     this.youtubeId = active.id;
+    this.youtubeFingerprint = youtubeFingerprint;
     try {
       await this.youtube.start();
     } catch {
@@ -247,6 +270,7 @@ export class ThreadlightRuntimeManager {
     await this.youtube?.stop();
     this.youtube = undefined;
     this.youtubeId = undefined;
+    this.youtubeFingerprint = undefined;
   }
 
   private refreshStatuses(

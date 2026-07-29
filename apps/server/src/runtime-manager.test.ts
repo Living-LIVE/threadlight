@@ -153,6 +153,53 @@ describe("ThreadlightRuntimeManager", () => {
     });
   });
 
+  it("restarts Discord when saved provider or participation settings change", async () => {
+    const store = await createDiscordStore();
+    const createdModes: string[] = [];
+    const start = vi.fn(async () => undefined);
+    const stop = vi.fn(async () => undefined);
+    const manager = new ThreadlightRuntimeManager(store, {
+      createGateway: (config) => {
+        createdModes.push(config.participationMode ?? "shy");
+        return {
+          ready: true,
+          get participationStatus() {
+            return {
+              mode: (config.participationMode ?? "shy") as "shy" | "medium" | "high",
+              quietWindowMs: config.ambientQuietMs ?? 20_000,
+              cooldownMs: config.ambientCooldownMs ?? 180_000,
+              maxQueueDepth: config.maxQueueDepth ?? 25,
+              pendingConversations: 0,
+              queuedMessages: 0,
+            };
+          },
+          start,
+          stop,
+        };
+      },
+    });
+
+    await manager.launch("11111111-1111-4111-8111-111111111111");
+    await store.update((config) => ({
+      ...config,
+      deployments: config.deployments.map((deployment) =>
+        deployment.kind === "discord" && deployment.discord
+          ? {
+              ...deployment,
+              discord: { ...deployment.discord, participationMode: "high" },
+              updatedAt: new Date().toISOString(),
+            }
+          : deployment,
+      ),
+    }));
+    await manager.reconcile();
+
+    expect(createdModes).toEqual(["shy", "high"]);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(stop).toHaveBeenCalledOnce();
+    expect((await manager.status()).deployments[0]?.participation).toMatchObject({ mode: "high" });
+  });
+
   it("reports a started YouTube connector as ready in the local dashboard", async () => {
     const store = await createYouTubeStore();
     const start = vi.fn(async () => undefined);
