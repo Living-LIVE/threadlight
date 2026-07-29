@@ -59,6 +59,8 @@ not be described as available in demos, issues, or release notes.
   that token configured: remote configuration, OAuth, drafts, and posting routes return `401`
   without it. The public preview remains intentionally available without that code; its live
   response uses the saved Gloo plus AO Lab provider pair and requires `THREADLIGHT_DEMO_ENABLED=true`.
+  The first anonymous scenario and a second warm scenario both returned `200` on 2026-07-29;
+  details are recorded in the [public demo recovery ledger](qa/2026-07-29-public-demo-recovery.md).
 - The current Docker image passed an exact-source build and isolated container health/control API
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 

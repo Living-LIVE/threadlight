@@ -27,17 +27,17 @@ The public route created a new saved-provider runtime per request. For Gloo, tha
 OAuth client-credentials exchange per public reflection. The failure was therefore likely in Gloo
 authentication or completion handling, not in the public-demo or control-token boundary.
 
-## Recovery Plan
+## Completed Remediation
 
-1. Cache the saved provider runtime only while its configuration is unchanged.
-2. Retry one transient provider failure for a curated public scenario only.
-3. Add regression coverage for runtime reuse and the bounded retry.
-4. Deploy once, then verify public scenario, public reflection, and protected control status.
-5. Update competition documentation with the final hosted evidence.
+1. Cached the saved provider runtime while its configuration is unchanged.
+2. Added one retry for a transient provider failure on curated public scenarios only.
+3. Added regression coverage for runtime reuse, bounded retry, and incomplete Gloo metadata.
+4. Deployed the final recovery revision `2b85401` to Railway production deployment
+   `f9f27b78-77a6-4a9f-919a-241fbcc9e6cd`.
 
 ## Local Evidence
 
-- `pnpm check` passed on 2026-07-29: lint, type-check, 56 tests, and production builds.
+- `pnpm check` passed on 2026-07-29: lint, type-check, 59 tests, and production builds.
 - The focused API regression verifies that two public scenarios reuse one configured runtime and a
   provider configuration update creates exactly one new runtime.
 - The hosted pre-deploy canary returned a live Gloo plus AO Lab reflection after the earlier
@@ -51,3 +51,19 @@ authentication or completion handling, not in the public-demo or control-token b
 - A subsequent live check showed the same two metadata fields can exceed their 240-character
   schema maximum. Gloo normalization now bounds both values before validation; this does not
   change the user-facing reply content.
+
+## Final Hosted Evidence
+
+| Surface | Result | Checked |
+| --- | --- | --- |
+| Railway deployment | `SUCCESS`, one running instance | 2026-07-29 |
+| Public scenario catalog | `200`, four curated scenarios | 2026-07-29 |
+| First anonymous reflection | `200`, Gloo plus AO Lab, Psalm 34:18 | 2026-07-29 |
+| Second anonymous reflection | `200`, Gloo plus AO Lab, Philippians 4:6-7 | 2026-07-29 |
+| Anonymous control status | `401 control_access_required` | 2026-07-29 |
+| Arbitrary public prompt body | `400 invalid_request` | 2026-07-29 |
+| Vercel dashboard shell | `200` | 2026-07-29 |
+
+Judges need no access code. The public dashboard is [threadlight.vercel.app](https://threadlight.vercel.app)
+and its curated public demo uses the Railway runtime. The operator token remains restricted to
+configuration, OAuth, draft review, and publishing routes.

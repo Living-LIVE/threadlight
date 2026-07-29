@@ -9,6 +9,10 @@ live, but the hosted preview still failed; the live configuration was restored t
 attributed-passage canary is verified. A working YouVersion key and visible attributed-passage
 canary remain a follow-up before claiming a live YouVersion integration in the submission.
 
+The public judging path is live at [threadlight.vercel.app](https://threadlight.vercel.app) with no
+login or access code. Its curated-scenario API has a current hosted canary using Gloo plus AO Lab;
+the protected configuration and publishing routes remain unavailable to anonymous visitors.
+
 The credential-free reference notebook lives at `notebook/threadlight_demo.ipynb`. It calls the
 same public curated-scenario API used by the web experience and exposes the judged decision,
 passage attribution, provider trace, and safety stages without embedding secrets. It must still be
