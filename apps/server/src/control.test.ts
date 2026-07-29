@@ -156,6 +156,17 @@ describe("local control configuration", () => {
 
       const protectedResponse = await app.inject({ method: "GET", url: "/api/control/status" });
       expect(protectedResponse.statusCode).toBe(401);
+      const protectedActivity = await app.inject({ method: "GET", url: "/api/control/activity" });
+      expect(protectedActivity.statusCode).toBe(401);
+      const operatorActivity = await app.inject({
+        method: "GET",
+        url: "/api/control/activity",
+        headers: {
+          authorization: "Bearer control-token-that-is-at-least-32-characters",
+        },
+      });
+      expect(operatorActivity.statusCode).toBe(200);
+      expect(operatorActivity.json().activity).toHaveLength(1);
     } finally {
       await app.close();
     }
@@ -202,6 +213,43 @@ describe("local control configuration", () => {
 
     const saved = await readFile(join(cleanup[0] ?? "", "config.json"), "utf8");
     expect(saved).toContain("local-secret");
+  });
+
+  it("rejects Gloo auto-routing when OpenAI is selected", async () => {
+    const store = await createStore();
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: new ThreadlightRuntimeManager(store),
+      logger: false,
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/control/providers",
+        payload: { ai: { provider: "openai", model: "auto" } },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        error: "invalid_request",
+        message: "Choose a specific OpenAI model before saving.",
+      });
+      expect((await store.load()).providers.ai.model).toBe("gpt-4.1-mini");
+    } finally {
+      await app.close();
+    }
   });
 
   it("exposes a sanitized catalog and creates a Discord draft", async () => {
@@ -421,6 +469,13 @@ describe("local control configuration", () => {
         payload: { kind: "discord" },
       });
       const id = created.json().id;
+      const beforeCredentials = await app.inject({
+        method: "GET",
+        url: `/api/control/deployments/${id}/discord/locations`,
+      });
+      expect(beforeCredentials.statusCode).toBe(409);
+      expect(beforeCredentials.json().message).toContain("Save a Discord bot token");
+
       const saved = await app.inject({
         method: "PATCH",
         url: `/api/control/deployments/${id}`,
@@ -447,6 +502,83 @@ describe("local control configuration", () => {
         selectedChannelId: "channel-1",
       });
       expect(locations.body).not.toContain("bot-secret");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("does not report a launch as successful until its runtime is ready", async () => {
+    const store = await createStore();
+    const id = "11111111-1111-4111-8111-111111111111";
+    const now = new Date().toISOString();
+    await store.update((config) => ({
+      ...config,
+      deployments: [
+        {
+          id,
+          kind: "discord",
+          name: "Discord",
+          state: "draft",
+          createdAt: now,
+          updatedAt: now,
+          discord: {
+            applicationId: "application-id",
+            botToken: "bot-token",
+            guildId: "guild-id",
+            channelId: "channel-id",
+            registerCommands: false,
+            participationMode: "shy",
+            quietSeconds: 20,
+            cooldownSeconds: 180,
+          },
+        },
+      ],
+    }));
+    const manager = new ThreadlightRuntimeManager(store, {
+      createGateway: () => ({
+        ready: false,
+        participationStatus: {
+          mode: "shy",
+          quietWindowMs: 20_000,
+          cooldownMs: 180_000,
+          maxQueueDepth: 25,
+          pendingConversations: 0,
+          queuedMessages: 0,
+        },
+        start: async () => {
+          throw new Error("Gateway unavailable");
+        },
+        stop: async () => undefined,
+      }),
+    });
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: manager,
+      logger: false,
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/control/deployments/${id}/launch`,
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({
+        error: "runtime_not_ready",
+        message: "Threadlight could not connect to Discord.",
+        runtime: { id, state: "error", ready: false },
+      });
     } finally {
       await app.close();
     }

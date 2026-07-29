@@ -79,4 +79,23 @@ describe("public demo workspace", () => {
     expect(result.body).toEqual(preview);
     expect(result.status).toBe(status);
   });
+
+  it("uses an explicit supported scenario instead of inferring it from editable copy", async () => {
+    const runPreview = vi.fn().mockResolvedValue(preview);
+    const status = createPublicDemoStatus();
+    await runPublicDemoControl(
+      status,
+      "/api/control/preview",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          scenarioId: "conflict",
+          prompt: "This text should not change the selected scenario.",
+        }),
+      },
+      runPreview,
+    );
+
+    expect(runPreview).toHaveBeenCalledWith("conflict");
+  });
 });

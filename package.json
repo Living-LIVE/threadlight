@@ -15,12 +15,15 @@
     "format": "biome format --write .",
     "lint": "biome check .",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:full": "pnpm check && pnpm test:e2e",
     "test:watch": "vitest",
     "typecheck": "pnpm -r --aggregate-output typecheck",
     "verify:local": "node scripts/verify-local-runtime.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
+    "@playwright/test": "^1.62.0",
     "@types/node": "26.1.1",
     "concurrently": "10.0.3",
     "tsx": "4.23.1",

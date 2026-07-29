@@ -10,6 +10,11 @@ no credentials, private browser chrome, or unpublished comment content.
 | [Desktop provider preview](assets/threadlight-provider-preview-desktop.png) | Cover image or first gallery frame | A running YouTube deployment and a saved Gloo plus AO Lab provider pair returning an attributed, no-send test response. |
 | [Mobile provider preview](assets/threadlight-provider-preview-mobile.png) | Supporting gallery frame | The local-control dashboard remains legible at a narrow viewport. |
 
+The current deployed-flow evidence is preserved under
+[`qa/assets/2026-07-29-hackathon-demo-audit`](qa/assets/2026-07-29-hackathon-demo-audit/).
+Use it for review and recording preparation. Recapture final gallery images only after the local
+judge-facing improvements are deployed and the YouVersion canary is complete.
+
 ## Recommended Gallery Order
 
 1. Use the desktop provider preview as the cover image.

@@ -10,6 +10,10 @@ blocks inside existing conversation habits rather than introducing another desti
 The current live demo uses the verified Gloo plus AO Lab provider pair; do not claim a live
 YouVersion retrieval until its passage canary succeeds.
 
+**Handoff status:** Do not submit yet. The public product and repository are ready for review, but
+the mandatory YouVersion proof, public Kaggle notebook, public video, and final media attachments
+remain open.
+
 ## What Eric Submits
 
 | Submission surface | Prepared artifact | Owner action |
@@ -20,6 +24,9 @@ YouVersion retrieval until its passage canary succeeds.
 | Demo video | Demo script below | Record/upload and add its public URL below. |
 | Cover image and media gallery | [Prepared gallery assets](competition-assets.md), plus a controlled Discord/YouTube walkthrough | Upload to the competition form. |
 | Written description | Copy below | Paste and adapt to the form's field limits. |
+
+Official requirements and the current red/amber/green comparison are recorded in the
+[hackathon rules and demo audit](qa/2026-07-29-hackathon-rules-and-demo-audit.md).
 
 ## Final Submission Links
 
@@ -50,6 +57,9 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 5. Run a bounded Gloo and Scripture response, then point out the attributed passage and provider trace.
 6. Close with the build story: an open-source reference implementation that works inside existing community habits.
 
+Do not record the final provider segment until YouVersion can be shown doing real attributed
+retrieval. The required APIs are part of submission validity, not an optional future-roadmap item.
+
 ## Pre-Submission Checklist
 
 - [x] Google OAuth callback saved and a channel-owner account connection completed.
@@ -59,6 +69,7 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 - [x] Hosted Discord runtime launched against the dedicated demo thread.
 - [ ] Public Discord invite added to the live dashboard.
 - [x] Hosted public activity and protected control boundaries reverified after deployment.
+- [x] Public source repository and reproducible self-hosted setup available.
 - [ ] Valid YouVersion App Key installed and one attributed Scripture retrieval verified.
 - [ ] Kaggle notebook published and its URL recorded above.
 - [ ] Demo video, cover image, and gallery uploaded.

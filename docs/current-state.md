@@ -26,10 +26,15 @@ hosted multi-tenant service.
   persistent gateway and poller runtime.
 - A no-login public live workspace that exposes sanitized connector health, operator-selected
   Discord and YouTube links, bounded recent activity, and public-safe error summaries. Operator
-  actions remain protected. Provider settings, connector setup, launch and pause controls, video
-  selection, and draft review remain browser-isolated in the configuration playground.
+  actions remain protected. A hosted operator can explicitly unlock the full control workspace
+  using the server's control access code; the code remains in browser memory only. Without that
+  code, provider settings, connector setup, launch and pause controls, video selection, and draft
+  review remain browser-isolated in the configuration playground. That playground uses a labeled,
+  deterministic provider check; real connector health and activity remain in Monitoring.
 - A provider-neutral core so channel and provider adapters can be added without coupling them to
   the dashboard.
+- A credential-free Playwright suite for the public setup, deployment, monitoring, error-filtering,
+  provider-transition, and mobile dashboard journeys.
 
 ## Planned
 
@@ -76,7 +81,8 @@ not be described as available in demos, issues, or release notes.
 For a complete local quality gate:
 
 ```bash
-pnpm check
+pnpm exec playwright install chromium
+pnpm test:full
 ```
 
 For focused local-control regression coverage:
@@ -85,7 +91,11 @@ For focused local-control regression coverage:
 pnpm vitest run \
   apps/server/src/control.test.ts \
   apps/server/src/runtime-manager.test.ts \
-  apps/web/src/launch-readiness.test.ts
+  apps/web/src/launch-readiness.test.ts \
+  apps/web/src/provider-model.test.ts \
+  apps/web/src/activity-filter.test.ts
+
+pnpm test:e2e --grep "public setup|monitoring"
 ```
 
 ## Next Contributions

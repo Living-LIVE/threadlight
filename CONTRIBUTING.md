@@ -36,12 +36,14 @@ Run the relevant test files while working, then run the full local quality gate 
 review:
 
 ```bash
-pnpm check
+pnpm exec playwright install chromium
+pnpm test:full
 ```
 
-For dashboard changes, verify the local flow at desktop and mobile widths. For Discord changes,
-add deterministic coverage for the changed participation or lifecycle behavior; do not depend on
-a live community server for the only regression proof.
+`pnpm check` remains the deterministic lint, typecheck, unit-test, and build gate.
+`pnpm test:e2e` runs the credential-free setup, deployment, monitoring, and mobile dashboard
+journeys. For Discord changes, add deterministic coverage for the changed participation or
+lifecycle behavior; do not depend on a live community server for the only regression proof.
 
 ## Pull Requests
 

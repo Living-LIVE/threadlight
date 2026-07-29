@@ -189,11 +189,31 @@ Start with the [documentation index](docs/README.md).
 
 ## Validation
 
+Install Playwright's pinned Chromium build once after installing dependencies:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Run the deterministic quality gate:
+
 ```bash
 pnpm check
 ```
 
 This runs formatting and lint checks, TypeScript validation, unit tests, and production builds.
+
+Run the browser journeys for setup, deployment, and monitoring:
+
+```bash
+pnpm test:e2e
+```
+
+Run both gates before release:
+
+```bash
+pnpm test:full
+```
 
 For the container surface:
 

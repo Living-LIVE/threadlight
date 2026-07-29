@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { DEMO_SCENARIOS, type ThreadlightOrchestrator } from "@threadlight/core";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ActivityStore } from "./activity.js";
 import {
@@ -165,6 +165,35 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     cachedPublicDemoRuntime = { config: savedConfig, runtime };
     return runtime;
   };
+  const getLiveStatus = async () => {
+    if (!controlStore || !runtimeManager) {
+      return {
+        generatedAt: new Date().toISOString(),
+        discord: publicDiscordStatus(options.config),
+        youtube: publicYouTubeStatus(),
+        activity: [],
+      };
+    }
+
+    const [saved, runtime, activity] = await Promise.all([
+      controlStore.load(),
+      runtimeManager.status(),
+      options.activityStore?.list(50) ?? Promise.resolve([]),
+    ]);
+    const discord = saved.deployments.find((deployment) => deployment.kind === "discord");
+    const youtubeDeployment = saved.deployments.find(
+      (deployment) => deployment.kind === "youtube-comments",
+    );
+    const discordRuntime = runtime.deployments.find((entry) => entry?.id === discord?.id);
+    const youtubeRuntime = runtime.deployments.find((entry) => entry?.id === youtubeDeployment?.id);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      discord: publicDiscordStatus(options.config, discord, discordRuntime),
+      youtube: publicYouTubeStatus(youtubeDeployment, youtubeRuntime),
+      activity: publicActivity(activity),
+    };
+  };
 
   await app.register(cors, {
     origin: options.config.WEB_ORIGIN,
@@ -270,6 +299,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       };
     });
 
+    app.get("/api/control/activity", async (_request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      return getLiveStatus();
+    });
+
     app.post("/api/control/providers", async (request, reply) => {
       const parsed = ProviderUpdateSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -277,10 +311,18 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           .code(400)
           .send({ error: "invalid_request", message: "Provider settings are invalid." });
       }
+      const current = await controlStore.load();
+      const nextAi = { ...current.providers.ai, ...parsed.data.ai };
+      if (nextAi.provider === "openai" && nextAi.model.toLowerCase() === "auto") {
+        return reply.code(400).send({
+          error: "invalid_request",
+          message: "Choose a specific OpenAI model before saving.",
+        });
+      }
       await controlStore.update((config) => ({
         ...config,
         providers: {
-          ai: { ...config.providers.ai, ...parsed.data.ai },
+          ai: nextAi,
           scripture: { ...config.providers.scripture, ...parsed.data.scripture },
         },
       }));
@@ -516,7 +558,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           });
         }
         await runtimeManager.launch(parsed.data.id);
-        return { ok: true };
+        return launchResponse(await runtimeManager.status(), parsed.data.id, reply);
       }
       if (deployment.kind !== "discord") {
         return reply.code(409).send({
@@ -525,7 +567,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
       }
       await runtimeManager.launch(parsed.data.id);
-      return { ok: true };
+      return launchResponse(await runtimeManager.status(), parsed.data.id, reply);
     });
 
     app.post("/api/control/deployments/:id/pause", async (request, reply) => {
@@ -741,62 +783,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(404).send({ error: "not_found" });
     }
     reply.header("Cache-Control", "no-store");
-    if (!controlStore || !runtimeManager) {
-      return {
-        generatedAt: new Date().toISOString(),
-        discord: publicDiscordStatus(options.config),
-        youtube: publicYouTubeStatus(),
-        activity: [],
-      };
-    }
-
-    const [saved, runtime, activity] = await Promise.all([
-      controlStore.load(),
-      runtimeManager.status(),
-      options.activityStore?.list(50) ?? Promise.resolve([]),
-    ]);
-    const discord = saved.deployments.find((deployment) => deployment.kind === "discord");
-    const youtubeDeployment = saved.deployments.find(
-      (deployment) => deployment.kind === "youtube-comments",
-    );
-    const discordRuntime = runtime.deployments.find((entry) => entry?.id === discord?.id);
-    const youtubeRuntime = runtime.deployments.find((entry) => entry?.id === youtubeDeployment?.id);
-
-    return {
-      generatedAt: new Date().toISOString(),
-      discord: publicDiscordStatus(options.config, discord, discordRuntime),
-      youtube: publicYouTubeStatus(youtubeDeployment, youtubeRuntime),
-      activity: activity.map(
-        ({
-          id,
-          createdAt,
-          source,
-          status,
-          actor,
-          input,
-          output,
-          reason,
-          reference,
-          provider,
-          durationMs,
-        }) => ({
-          id,
-          createdAt,
-          source,
-          status,
-          actor,
-          input,
-          output,
-          reason:
-            status === "error"
-              ? `${source === "discord" ? "Discord" : "YouTube"} connector operation failed.`
-              : reason,
-          reference,
-          provider,
-          durationMs,
-        }),
-      ),
-    };
+    return getLiveStatus();
   });
 
   app.get("/api/demo/scenarios", async () => ({
@@ -911,6 +898,22 @@ function deploymentConfiguredForLaunch(deployment: Deployment) {
   );
 }
 
+function launchResponse(
+  runtime: Awaited<ReturnType<ThreadlightRuntimeManager["status"]>>,
+  deploymentId: string,
+  reply: FastifyReply,
+) {
+  const status = runtime.deployments.find((deployment) => deployment?.id === deploymentId);
+  if (!status?.ready) {
+    return reply.code(409).send({
+      error: "runtime_not_ready",
+      message: status?.message ?? "Threadlight saved the deployment but could not start it.",
+      runtime: status,
+    });
+  }
+  return { ok: true, runtime: status };
+}
+
 function youtubeOAuthConfig(
   config: ThreadlightConfig,
   settings: Deployment["youtube"] | undefined,
@@ -1006,6 +1009,41 @@ function publicYouTubeStatus(
 
 function publicParticipationLabel(mode: "shy" | "medium" | "high") {
   return { shy: "Prompted", medium: "Attentive", high: "Active" }[mode];
+}
+
+function publicActivity(
+  activity: Awaited<ReturnType<NonNullable<BuildAppOptions["activityStore"]>["list"]>>,
+) {
+  return activity.map(
+    ({
+      id,
+      createdAt,
+      source,
+      status,
+      actor,
+      input,
+      output,
+      reason,
+      reference,
+      provider,
+      durationMs,
+    }) => ({
+      id,
+      createdAt,
+      source,
+      status,
+      actor,
+      input,
+      output,
+      reason:
+        status === "error"
+          ? `${source === "discord" ? "Discord" : "YouTube"} connector operation failed.`
+          : reason,
+      reference,
+      provider,
+      durationMs,
+    }),
+  );
 }
 
 function publicYouTubePolicy(mode: "review" | "selective" | "high-touch") {

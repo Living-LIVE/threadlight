@@ -1,7 +1,13 @@
 # Competition Readiness
 
-Threadlight can be developed with local provider adapters, but the competition submission must
-demonstrate the required providers doing real, visible work.
+The official [evaluation criteria](https://www.kaggle.com/competitions/scripture-in-new-frontiers/overview/evaluation)
+require both the YouVersion Platform API and Gloo AI Studio API. The competition scores Impact and
+Vision at 40 points, Video Pitch and Storytelling at 30 points, and Technical Depth and Execution at
+30 points.
+
+**Current submission status: blocked.** Threadlight is a working public product, but it cannot be
+represented as a valid final entry until the YouVersion canary and required public Kaggle artifacts
+are complete.
 
 Gloo and YouVersion runtime adapters are implemented. Gloo has completed a bounded live
 credential/completion canary. The supplied YouVersion App Key was retried after its owner made it
@@ -33,6 +39,7 @@ Credential values are never printed.
 
 Submission readiness also requires:
 
+- Real, visible use of both Gloo AI Studio and the YouVersion Platform API.
 - A public working product or interactive demo with no login or paywall.
 - A public code repository with reproducible setup instructions.
 - A public Kaggle notebook.
@@ -41,3 +48,6 @@ Submission readiness also requires:
 
 Use the [competition submission handoff](competition-submission.md) as the final owner checklist,
 demo script, and artifact manifest.
+
+See the [2026-07-29 rules and demo audit](qa/2026-07-29-hackathon-rules-and-demo-audit.md)
+for the requirement matrix, deployed screenshots, rubric comparison, and exact remaining gates.
