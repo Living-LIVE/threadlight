@@ -16,7 +16,8 @@
     "lint": "biome check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm -r --aggregate-output typecheck"
+    "typecheck": "pnpm -r --aggregate-output typecheck",
+    "verify:local": "node scripts/verify-local-runtime.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.5",

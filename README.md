@@ -82,6 +82,19 @@ pnpm dev
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` requests to the local
 API at `http://127.0.0.1:8787`.
 
+Verify a configured local Discord runtime without sending a Discord message:
+
+```bash
+pnpm verify:local
+pnpm verify:local -- --preview
+```
+
+The preview variant calls the saved AI and Scripture providers but does not post to a destination.
+If a local dashboard unexpectedly shows a stale destination or provider, stop existing local
+Threadlight processes and restart `pnpm dev` without inherited `THREADLIGHT_CONFIG_PATH` or
+`DISCORD_ENABLED` environment variables. Those variables deliberately override `.env.local` and
+the default local configuration volume.
+
 The dashboard starts without credentials. Copy `.env.example` to `.env.local` only when you want
 to bootstrap existing local values:
 
