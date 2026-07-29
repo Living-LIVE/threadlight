@@ -84,6 +84,33 @@ describe("YouTubeClient", () => {
       expect.any(Object),
     );
   });
+
+  it("lists all owned channels and scopes the video picker to a selected channel", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            { id: "channel-1", snippet: { title: "Main channel" } },
+            { id: "channel-2", snippet: { title: "Stories" } },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ items: [] }));
+    const client = new YouTubeClient(fetchFn);
+
+    await expect(client.ownedChannels("access-token")).resolves.toEqual([
+      { id: "channel-1", name: "Main channel" },
+      { id: "channel-2", name: "Stories" },
+    ]);
+    await client.ownedVideos("access-token", "channel-2");
+    expect(fetchFn).toHaveBeenLastCalledWith(
+      expect.stringContaining(
+        "search?part=snippet&type=video&order=date&maxResults=50&channelId=channel-2",
+      ),
+      expect.any(Object),
+    );
+  });
 });
 
 describe("YouTube OAuth state", () => {

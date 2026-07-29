@@ -44,6 +44,16 @@ describe("public demo workspace", () => {
     );
     expect(videos.body).toEqual(expect.objectContaining({ videos: expect.any(Array) }));
 
+    const channels = await runPublicDemoControl(
+      added.status,
+      `/api/control/deployments/${id}/youtube/channels`,
+      undefined,
+      vi.fn(),
+    );
+    expect(channels.body).toEqual(
+      expect.objectContaining({ channels: expect.any(Array), selectedChannelId: "demo-channel" }),
+    );
+
     const launched = await runPublicDemoControl(
       added.status,
       `/api/control/deployments/${id}/launch`,

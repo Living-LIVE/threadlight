@@ -15,7 +15,11 @@ import {
   providerConfigured,
   sanitizeConfig,
 } from "./control.js";
-import { getDiscordInstallUrl, type ParticipationStatus } from "./discord/index.js";
+import {
+  getDiscordInstallUrl,
+  listDiscordLocations,
+  type ParticipationStatus,
+} from "./discord/index.js";
 import { competitionReadiness, type ThreadlightConfig } from "./env.js";
 import { createControlRuntime } from "./runtime.js";
 import type { ThreadlightRuntimeManager } from "./runtime-manager.js";
@@ -34,6 +38,7 @@ type BuildAppOptions = {
   controlStore?: LocalControlStore;
   runtimeManager?: ThreadlightRuntimeManager;
   controlRuntimeFactory?: (config: LocalControlConfig) => ThreadlightOrchestrator;
+  listDiscordLocations?: typeof listDiscordLocations;
   runtimeStatus?: () =>
     | {
         discord: {
@@ -144,6 +149,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // Allow a judge to run each curated scenario without exposing arbitrary prompt generation.
   const publicDemoLimiter = new MemoryRateLimiter(12, 60_000);
   const youtube = new YouTubeClient();
+  const discordLocations = options.listDiscordLocations ?? listDiscordLocations;
   const controlRuntimeFactory = options.controlRuntimeFactory ?? createControlRuntime;
   let cachedPublicDemoRuntime:
     | { config: LocalControlConfig; runtime: ThreadlightOrchestrator }
@@ -409,6 +415,43 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(201).send({ id: deployment.id });
     });
 
+    app.get("/api/control/deployments/:id/discord/locations", async (request, reply) => {
+      const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      const query = z
+        .object({ guildId: z.string().trim().min(1).max(80).optional() })
+        .safeParse(request.query);
+      if (!params.success || !query.success) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      const deployment = (await controlStore.load()).deployments.find(
+        (entry) => entry.id === params.data.id && entry.kind === "discord",
+      );
+      const discord = deployment?.discord;
+      if (!discord?.botToken) {
+        return reply.code(409).send({
+          error: "discord_not_connected",
+          message: "Save a Discord bot token before choosing a server and channel.",
+        });
+      }
+      const selectedGuildId = query.data.guildId ?? discord.guildId;
+      try {
+        const locations = await discordLocations(discord.botToken, selectedGuildId);
+        return {
+          ...locations,
+          selectedGuildId,
+          selectedChannelId: selectedGuildId === discord.guildId ? discord.channelId : undefined,
+        };
+      } catch (error) {
+        return reply.code(409).send({
+          error: "discord_locations_failed",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Threadlight could not load Discord locations.",
+        });
+      }
+    });
+
     app.patch("/api/control/deployments/:id", async (request, reply) => {
       const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
       const parsed = DeploymentUpdateSchema.safeParse(request.body);
@@ -574,7 +617,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
     app.get("/api/control/deployments/:id/youtube/videos", async (request, reply) => {
       const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
-      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      const query = z
+        .object({ channelId: z.string().trim().min(1).max(160).optional() })
+        .safeParse(request.query);
+      if (!parsed.success || !query.success)
+        return reply.code(400).send({ error: "invalid_request" });
       const deployment = (await controlStore.load()).deployments.find(
         (entry) => entry.id === parsed.data.id && entry.kind === "youtube-comments",
       );
@@ -588,12 +635,55 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       }
       try {
         const token = await youtube.refresh(oauth, settings.refreshToken);
-        return { videos: await youtube.ownedVideos(token.accessToken) };
+        const selectedChannelId = query.data.channelId ?? settings.channelId;
+        if (!selectedChannelId) {
+          return reply.code(409).send({
+            error: "youtube_channel_missing",
+            message: "Choose a YouTube channel before choosing videos.",
+          });
+        }
+        const channels = await youtube.ownedChannels(token.accessToken);
+        if (!channels.some((channel) => channel.id === selectedChannelId)) {
+          return reply.code(409).send({
+            error: "youtube_channel_invalid",
+            message: "Choose a channel owned by the connected Google account.",
+          });
+        }
+        return { videos: await youtube.ownedVideos(token.accessToken, selectedChannelId) };
       } catch (error) {
         return reply.code(409).send({
           error: "youtube_videos_failed",
           message:
             error instanceof Error ? error.message : "Threadlight could not list YouTube videos.",
+        });
+      }
+    });
+
+    app.get("/api/control/deployments/:id/youtube/channels", async (request, reply) => {
+      const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      const deployment = (await controlStore.load()).deployments.find(
+        (entry) => entry.id === parsed.data.id && entry.kind === "youtube-comments",
+      );
+      const settings = deployment?.youtube;
+      const oauth = youtubeOAuthConfig(options.config, settings);
+      if (!settings?.refreshToken || !oauth) {
+        return reply.code(409).send({
+          error: "youtube_not_connected",
+          message: "Connect a YouTube account before choosing a channel.",
+        });
+      }
+      try {
+        const token = await youtube.refresh(oauth, settings.refreshToken);
+        return {
+          channels: await youtube.ownedChannels(token.accessToken),
+          selectedChannelId: settings.channelId,
+        };
+      } catch (error) {
+        return reply.code(409).send({
+          error: "youtube_channels_failed",
+          message:
+            error instanceof Error ? error.message : "Threadlight could not list YouTube channels.",
         });
       }
     });

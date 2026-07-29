@@ -223,6 +223,67 @@ describe("local control configuration", () => {
     }
   });
 
+  it("lists selectable Discord servers and channels without exposing bot credentials", async () => {
+    const store = await createStore();
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: new ThreadlightRuntimeManager(store),
+      listDiscordLocations: async (_token, guildId) => ({
+        servers: [{ id: "guild-1", name: "Live Tapestry" }],
+        channels: guildId === "guild-1" ? [{ id: "channel-1", name: "integrations" }] : [],
+      }),
+      logger: false,
+    });
+
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/control/deployments",
+        payload: { kind: "discord" },
+      });
+      const id = created.json().id;
+      const saved = await app.inject({
+        method: "PATCH",
+        url: `/api/control/deployments/${id}`,
+        payload: {
+          discord: {
+            applicationId: "application-id",
+            botToken: "bot-secret",
+            guildId: "guild-1",
+            channelId: "channel-1",
+          },
+        },
+      });
+      expect(saved.statusCode).toBe(200);
+
+      const locations = await app.inject({
+        method: "GET",
+        url: `/api/control/deployments/${id}/discord/locations`,
+      });
+      expect(locations.statusCode).toBe(200);
+      expect(locations.json()).toEqual({
+        servers: [{ id: "guild-1", name: "Live Tapestry" }],
+        channels: [{ id: "channel-1", name: "integrations" }],
+        selectedGuildId: "guild-1",
+        selectedChannelId: "channel-1",
+      });
+      expect(locations.body).not.toContain("bot-secret");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("requires an operator token for remote control and disables anonymous demos", async () => {
     const store = await createStore();
     const controlToken = "t".repeat(32);

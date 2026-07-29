@@ -66,11 +66,12 @@ committed configuration files.
 
 1. Select **YouTube Comments** in Threadlight.
 2. Select **Connect Google account** and sign in with the Google account that owns the channel.
-3. Choose up to ten videos Threadlight should watch.
+3. Choose the intended owned YouTube channel, then choose up to ten videos Threadlight should
+   watch.
 4. Configure the reply policy and model, then launch.
 
-Threadlight persists the selected-video allowlist locally and polls only those videos. It does not
-watch every video on the connected channel.
+Threadlight persists the selected-channel and selected-video allowlists locally and polls only
+those videos. It does not watch every video on the connected account.
 
 ## Intended Runtime Flow
 

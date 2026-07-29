@@ -195,6 +195,16 @@ const publicDemoVideos = [
   { id: "demo-video-2", title: "When the workday asks too much" },
 ];
 
+const publicDemoDiscordServers = [{ id: "demo-live-tapestry", name: "Live Tapestry" }];
+const publicDemoDiscordChannels = [
+  { id: "demo-integrations", name: "integrations" },
+  { id: "demo-prayer-room", name: "prayer-room" },
+];
+const publicDemoYouTubeChannels = [
+  { id: "demo-channel", name: "Threadlight Demo Channel" },
+  { id: "demo-stories", name: "Threadlight Stories" },
+];
+
 export function createPublicDemoStatus(): ControlStatus {
   const discord: Deployment = {
     id: "demo-discord",
@@ -232,7 +242,8 @@ export async function runPublicDemoControl(
   init: RequestInit | undefined,
   preview: (scenarioId: string) => Promise<ControlPreview>,
 ): Promise<{ status: ControlStatus; body: unknown }> {
-  const path = new URL(url, "https://threadlight.demo").pathname;
+  const requestUrl = new URL(url, "https://threadlight.demo");
+  const path = requestUrl.pathname;
   const body = requestBody(init);
   if (path === "/api/control/status") return { status: current, body: current };
   if (path === "/api/control/preview" && init?.method === "POST") {
@@ -305,6 +316,25 @@ export async function runPublicDemoControl(
   }
   if (action === "youtube/videos" && (init?.method ?? "GET") === "GET") {
     return { status: next, body: { videos: publicDemoVideos } };
+  }
+  if (action === "youtube/channels" && (init?.method ?? "GET") === "GET") {
+    return {
+      status: next,
+      body: { channels: publicDemoYouTubeChannels, selectedChannelId: "demo-channel" },
+    };
+  }
+  if (action === "discord/locations" && (init?.method ?? "GET") === "GET") {
+    const selectedGuildId = requestUrl.searchParams.get("guildId") ?? "demo-live-tapestry";
+    return {
+      status: next,
+      body: {
+        servers: publicDemoDiscordServers,
+        channels: selectedGuildId === "demo-live-tapestry" ? publicDemoDiscordChannels : [],
+        selectedGuildId,
+        selectedChannelId:
+          selectedGuildId === "demo-live-tapestry" ? "demo-integrations" : undefined,
+      },
+    };
   }
   if (action === "youtube/scan" && init?.method === "POST") {
     const youtube = deployment.youtube;
@@ -774,9 +804,46 @@ function DiscordConnection({
   onError: (value: string) => void;
 }) {
   const request = useControlRequest();
-  const [form, setForm] = useState({ applicationId: "", botToken: "", guildId: "", channelId: "" });
+  const [form, setForm] = useState({ applicationId: "", botToken: "" });
+  const [locations, setLocations] = useState<{
+    servers: Array<{ id: string; name: string }>;
+    channels: Array<{ id: string; name: string }>;
+  }>();
+  const [guildId, setGuildId] = useState("");
+  const [channelId, setChannelId] = useState("");
+  const [locationsLoading, setLocationsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const saved = deployment.discord;
+  const loadLocations = useCallback(
+    async (selectedGuildId?: string) => {
+      setLocationsLoading(true);
+      try {
+        const query = selectedGuildId ? `?guildId=${encodeURIComponent(selectedGuildId)}` : "";
+        const result = await request<{
+          servers: Array<{ id: string; name: string }>;
+          channels: Array<{ id: string; name: string }>;
+          selectedGuildId?: string;
+          selectedChannelId?: string;
+        }>(`/api/control/deployments/${deployment.id}/discord/locations${query}`);
+        setLocations(result);
+        setGuildId((current) => current || result.selectedGuildId || "");
+        setChannelId((current) => current || result.selectedChannelId || "");
+      } catch (reason) {
+        setLocations({ servers: [], channels: [] });
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "Threadlight could not load Discord servers and channels.",
+        );
+      } finally {
+        setLocationsLoading(false);
+      }
+    },
+    [deployment.id, onError, request],
+  );
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -784,7 +851,7 @@ function DiscordConnection({
     try {
       await request(`/api/control/deployments/${deployment.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ discord: omitEmpty(form) }),
+        body: JSON.stringify({ discord: omitEmpty({ ...form, guildId, channelId }) }),
       });
       await onSaved();
       onContinue();
@@ -800,7 +867,8 @@ function DiscordConnection({
       <p className="eyebrow">Connect Discord</p>
       <h1>Choose where Threadlight listens.</h1>
       <p className="lede">
-        Use the application and bot you created in Discord. These values never leave this machine.
+        Select a server and text channel the connected bot can access. Credentials stay on this
+        machine and are never displayed again.
       </p>
       <form onSubmit={submit}>
         <Field
@@ -811,7 +879,7 @@ function DiscordConnection({
             value={form.applicationId}
             onChange={(event) => setForm({ ...form, applicationId: event.target.value })}
             placeholder={
-              saved?.applicationIdConfigured ? "Already configured" : "123456789012345678"
+              saved?.applicationIdConfigured ? "Replace saved application ID" : "123456789012345678"
             }
           />
         </Field>
@@ -823,23 +891,62 @@ function DiscordConnection({
             value={form.botToken}
             onChange={(event) => setForm({ ...form, botToken: event.target.value })}
             type="password"
-            placeholder={saved?.botTokenConfigured ? "Already configured" : "Paste bot token"}
+            placeholder={saved?.botTokenConfigured ? "Replace saved bot token" : "Paste bot token"}
           />
         </Field>
         <div className="field-grid">
-          <Field label="Server ID">
-            <input
-              value={form.guildId}
-              onChange={(event) => setForm({ ...form, guildId: event.target.value })}
-              placeholder={saved?.guildIdConfigured ? "Already configured" : "Discord server ID"}
-            />
+          <Field label="Server" hint="Servers available to the connected bot">
+            {locations?.servers.length ? (
+              <select
+                value={guildId}
+                disabled={locationsLoading}
+                onChange={(event) => {
+                  const nextGuildId = event.target.value;
+                  setGuildId(nextGuildId);
+                  setChannelId("");
+                  void loadLocations(nextGuildId);
+                }}
+              >
+                <option value="">Choose a server</option>
+                {locations.servers.map((server) => (
+                  <option key={server.id} value={server.id}>
+                    {server.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={guildId}
+                onChange={(event) => setGuildId(event.target.value)}
+                placeholder={
+                  locationsLoading ? "Loading servers..." : "Save a bot token to load servers"
+                }
+              />
+            )}
           </Field>
-          <Field label="Channel ID">
-            <input
-              value={form.channelId}
-              onChange={(event) => setForm({ ...form, channelId: event.target.value })}
-              placeholder={saved?.channelIdConfigured ? "Already configured" : "Discord channel ID"}
-            />
+          <Field label="Channel" hint="Threadlight listens here and in its child threads">
+            {locations?.servers.length ? (
+              <select
+                value={channelId}
+                disabled={locationsLoading || !guildId || locations.channels.length === 0}
+                onChange={(event) => setChannelId(event.target.value)}
+              >
+                <option value="">
+                  {locationsLoading ? "Loading channels..." : "Choose a text channel"}
+                </option>
+                {locations.channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    #{channel.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={channelId}
+                onChange={(event) => setChannelId(event.target.value)}
+                placeholder="Save a bot token to load channels"
+              />
+            )}
           </Field>
         </div>
         <p className="helper">
@@ -885,6 +992,9 @@ function YouTubeConnection({
   const [replyMode, setReplyMode] = useState(saved?.replyMode ?? "review");
   const [pollSeconds, setPollSeconds] = useState(String(saved?.pollSeconds ?? 180));
   const [dailyReplyLimit, setDailyReplyLimit] = useState(String(saved?.dailyReplyLimit ?? 12));
+  const [channels, setChannels] = useState<Array<{ id: string; name: string }>>([]);
+  const [channelId, setChannelId] = useState(saved?.channelId ?? "");
+  const [channelsLoading, setChannelsLoading] = useState(false);
   const [videos, setVideos] = useState<Array<{ id: string; title: string; thumbnailUrl?: string }>>(
     [],
   );
@@ -897,9 +1007,35 @@ function YouTubeConnection({
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
+    setChannelsLoading(true);
+    void request<{
+      channels: Array<{ id: string; name: string }>;
+      selectedChannelId?: string;
+    }>(`/api/control/deployments/${deployment.id}/youtube/channels`)
+      .then((result) => {
+        if (cancelled) return;
+        setChannels(result.channels);
+        setChannelId((current) => current || result.selectedChannelId || "");
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled)
+          onError(
+            reason instanceof Error ? reason.message : "Threadlight could not load your channels.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setChannelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, deployment.id, onError, request]);
+  useEffect(() => {
+    if (!connected || !channelId) return;
+    let cancelled = false;
     setVideosLoading(true);
     void request<{ videos: Array<{ id: string; title: string; thumbnailUrl?: string }> }>(
-      `/api/control/deployments/${deployment.id}/youtube/videos`,
+      `/api/control/deployments/${deployment.id}/youtube/videos?channelId=${encodeURIComponent(channelId)}`,
     )
       .then((result) => {
         if (!cancelled) setVideos(result.videos);
@@ -916,7 +1052,7 @@ function YouTubeConnection({
     return () => {
       cancelled = true;
     };
-  }, [connected, deployment.id, onError, request]);
+  }, [channelId, connected, deployment.id, onError, request]);
   const save = async () => {
     const available = new Map(
       [...videos, ...(saved?.selectedVideos ?? [])].map((video) => [video.id, video]),
@@ -930,6 +1066,9 @@ function YouTubeConnection({
       method: "PATCH",
       body: JSON.stringify({
         youtube: {
+          channelId,
+          channelName:
+            channels.find((channel) => channel.id === channelId)?.name ?? saved?.channelName,
           replyMode,
           pollSeconds: Number(pollSeconds),
           dailyReplyLimit: Number(dailyReplyLimit),
@@ -997,15 +1136,35 @@ function YouTubeConnection({
       ) : (
         <>
           <p className="helper">
-            <ExternalLink size={14} /> Connected to {saved?.channelName ?? "your YouTube channel"}
+            <ExternalLink size={14} /> Connected with the owner Google account. Choose which channel
+            and videos Threadlight should watch.
           </p>
+          <Field label="YouTube channel" hint="Channels available to the connected Google account">
+            <select
+              value={channelId}
+              disabled={channelsLoading || channels.length === 0}
+              onChange={(event) => {
+                setChannelId(event.target.value);
+                setSelectedVideoIds(new Set());
+              }}
+            >
+              <option value="">
+                {channelsLoading ? "Loading channels..." : "Choose a YouTube channel"}
+              </option>
+              {channels.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field
             label="Videos to watch"
             hint="Choose up to 10 videos. Threadlight ignores comments on every other video."
           >
             <div className="video-list">
               {videosLoading && <small>Loading your recent videos...</small>}
-              {!videosLoading && videos.length === 0 && (
+              {!videosLoading && channelId && videos.length === 0 && (
                 <small>No videos were found for this channel.</small>
               )}
               {videos.map((video) => {

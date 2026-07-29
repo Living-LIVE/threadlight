@@ -40,7 +40,8 @@ docker compose up --build -d
 Open [http://localhost:8787](http://localhost:8787), then complete the three-step setup:
 
 1. Choose Discord.
-2. Enter the Discord application, bot, server, and channel values.
+2. Enter the Discord application and bot credentials once, then choose the server and text channel
+   from the bot-visible selectors. Saved credentials are never shown in the browser again.
 3. Choose a participation mode and configure the executable provider.
 4. From the dashboard, run a test response to verify the saved provider pair before enabling a destination.
 
@@ -116,8 +117,9 @@ Docker environment. They identify the Threadlight installation's Google OAuth ap
 are never entered in, or returned to, the dashboard.
 
 After that one-time installation setup, a channel owner selects **YouTube Comments**, signs in
-with the Google account that owns their channel, and chooses up to ten videos for Threadlight to
-watch. The connector polls only those selected videos. Comments become review drafts by default.
+with the Google account that owns their channels, chooses the intended YouTube channel, and then
+selects up to ten videos for Threadlight to watch. The connector polls only those selected videos.
+Comments become review drafts by default.
 
 ## Discord Prerequisites
 

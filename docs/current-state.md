@@ -14,7 +14,7 @@ hosted multi-tenant service.
   sending a message to a community destination.
 - One executable Discord destination, with Prompted, Attentive, and Active participation policies.
 - OpenAI or Gloo for AI composition, paired with AO Lab or YouVersion for Scripture retrieval.
-- A YouTube Comments connector with Google OAuth callback handling, owned-channel discovery,
+- A YouTube Comments connector with Google OAuth callback handling, owned-channel selection,
   polling limited to owner-selected videos, review drafts, and explicit threaded-reply posting.
   The hosted callback is registered, a channel-owner account is connected, and both the
   owner-comment safety canary and one controlled non-owner draft-and-approved-reply canary are

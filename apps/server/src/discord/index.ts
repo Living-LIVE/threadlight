@@ -26,6 +26,15 @@ export {
   startDiscordGateway,
 } from "./gateway.js";
 export type {
+  DiscordChannelLocation,
+  DiscordLocations,
+  DiscordServerLocation,
+} from "./locations.js";
+export {
+  DiscordLocationsError,
+  listDiscordLocations,
+} from "./locations.js";
+export type {
   DiscordParticipationMode,
   ParticipationCandidate,
   ParticipationDisposition,

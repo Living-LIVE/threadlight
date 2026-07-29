@@ -28,6 +28,11 @@ export type YouTubeVideo = {
   thumbnailUrl?: string;
 };
 
+export type YouTubeChannel = {
+  id: string;
+  name: string;
+};
+
 type FetchFn = typeof fetch;
 
 export class YouTubeClient {
@@ -66,23 +71,33 @@ export class YouTubeClient {
   }
 
   public async ownedChannel(accessToken: string) {
-    const payload = await this.request<{
-      items?: Array<{ id: string; snippet?: { title?: string } }>;
-    }>("/channels?part=snippet&mine=true&maxResults=1", accessToken);
-    const channel = payload.items?.[0];
-    if (!channel?.id)
-      throw new YouTubeApiError("No owned YouTube channel was found for this account.");
-    return { id: channel.id, name: channel.snippet?.title ?? "YouTube channel" };
+    const channel = (await this.ownedChannels(accessToken))[0];
+    if (!channel) throw new YouTubeApiError("No owned YouTube channel was found for this account.");
+    return channel;
   }
 
-  public async ownedVideos(accessToken: string): Promise<YouTubeVideo[]> {
+  public async ownedChannels(accessToken: string): Promise<YouTubeChannel[]> {
+    const payload = await this.request<{
+      items?: Array<{ id: string; snippet?: { title?: string } }>;
+    }>("/channels?part=snippet&mine=true&maxResults=50", accessToken);
+    return (payload.items ?? [])
+      .map((channel): YouTubeChannel | undefined =>
+        channel.id
+          ? { id: channel.id, name: channel.snippet?.title ?? "YouTube channel" }
+          : undefined,
+      )
+      .filter((channel): channel is YouTubeChannel => Boolean(channel));
+  }
+
+  public async ownedVideos(accessToken: string, channelId?: string): Promise<YouTubeVideo[]> {
     const query = new URLSearchParams({
       part: "snippet",
-      forMine: "true",
       type: "video",
       order: "date",
       maxResults: "50",
     });
+    if (channelId) query.set("channelId", channelId);
+    else query.set("forMine", "true");
     const payload = await this.request<{
       items?: Array<{
         id?: { videoId?: string };
