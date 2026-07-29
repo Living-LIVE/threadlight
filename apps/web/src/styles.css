@@ -66,6 +66,13 @@ select:focus-visible {
 .topbar-actions {
   gap: 18px;
 }
+.demo-workspace-note {
+  max-width: 980px;
+  margin: 18px auto -52px;
+  padding: 0 24px;
+  color: #68716f;
+  font-size: 13px;
+}
 .local-state {
   gap: 8px;
   color: #5e6866;

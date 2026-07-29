@@ -23,15 +23,16 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { canLaunchSelectedProvider } from "./launch-readiness.js";
 import { resolveStartupRoute } from "./startup-route.js";
 import { runYouTubeAction } from "./youtube-action.js";
 
-type DestinationKind = "discord" | "slack" | "youtube-comments" | "teams" | "twitch";
-type Mode = "shy" | "medium" | "high";
-type Provider = "openai" | "gemini" | "gloo" | "bonfire";
+export type DestinationKind = "discord" | "slack" | "youtube-comments" | "teams" | "twitch";
+export type Mode = "shy" | "medium" | "high";
+export type Provider = "openai" | "gemini" | "gloo" | "bonfire";
 
 const participationModeLabels: Record<Mode, string> = {
   shy: "Prompted",
@@ -39,7 +40,7 @@ const participationModeLabels: Record<Mode, string> = {
   high: "Active",
 };
 
-type Deployment = {
+export type Deployment = {
   id: string;
   kind: DestinationKind;
   name: string;
@@ -78,7 +79,7 @@ type Deployment = {
   };
 };
 
-type ControlStatus = {
+export type ControlStatus = {
   youtubeCallbackUrl: string;
   youtubeOAuthConfigured: boolean;
   catalog: Array<{
@@ -106,7 +107,7 @@ type ControlStatus = {
   };
 };
 
-type ControlPreview = {
+export type ControlPreview = {
   reply?: {
     message: string;
     passage?: {
@@ -117,20 +118,6 @@ type ControlPreview = {
   };
   decision: { action: string; reason: string };
   trace: { aiProvider: string; scriptureProvider: string; totalMs: number };
-};
-
-type DemoScenario = {
-  id: string;
-  label: string;
-  summary: string;
-  roomName: string;
-  suggestedPrompt: string;
-  messages: Array<{
-    id: string;
-    author: { id: string; name: string };
-    content: string;
-    createdAt: string;
-  }>;
 };
 
 const icons = {
@@ -195,21 +182,278 @@ function useControlRequest() {
   return request;
 }
 
+const publicDemoCatalog: ControlStatus["catalog"] = [
+  { kind: "discord", label: "Discord", state: "available" },
+  { kind: "slack", label: "Slack", state: "planned" },
+  { kind: "youtube-comments", label: "YouTube Comments", state: "available" },
+  { kind: "teams", label: "Microsoft Teams", state: "coming-soon" },
+  { kind: "twitch", label: "Twitch", state: "coming-soon" },
+];
+
+const publicDemoVideos = [
+  { id: "demo-video-1", title: "Making room for a quieter kind of hope" },
+  { id: "demo-video-2", title: "When the workday asks too much" },
+];
+
+export function createPublicDemoStatus(): ControlStatus {
+  const discord: Deployment = {
+    id: "demo-discord",
+    kind: "discord",
+    name: "Live Tapestry",
+    state: "running",
+    configured: true,
+    discord: {
+      applicationIdConfigured: true,
+      botTokenConfigured: true,
+      guildIdConfigured: true,
+      channelIdConfigured: true,
+      participationMode: "shy",
+      quietSeconds: 20,
+    },
+  };
+  return withPublicDemoRuntime({
+    youtubeCallbackUrl: "",
+    youtubeOAuthConfigured: true,
+    catalog: publicDemoCatalog,
+    configuration: {
+      providers: {
+        ai: { provider: "gloo", model: "auto", configured: true },
+        scripture: { provider: "ao", bibleId: "BSB", configured: true },
+      },
+      deployments: [discord],
+    },
+    runtime: { deployments: [] },
+  });
+}
+
+export async function runPublicDemoControl(
+  current: ControlStatus,
+  url: string,
+  init: RequestInit | undefined,
+  preview: (scenarioId: string) => Promise<ControlPreview>,
+): Promise<{ status: ControlStatus; body: unknown }> {
+  const path = new URL(url, "https://threadlight.demo").pathname;
+  const body = requestBody(init);
+  if (path === "/api/control/status") return { status: current, body: current };
+  if (path === "/api/control/preview" && init?.method === "POST") {
+    const prompt = typeof body.prompt === "string" ? body.prompt.toLowerCase() : "";
+    return { status: current, body: await preview(prompt.includes("pray") ? "prayer" : "grief") };
+  }
+
+  const next = clonePublicDemoStatus(current);
+  if (path === "/api/control/providers" && init?.method === "POST") {
+    const providers = body as {
+      ai?: { provider?: Provider; model?: string; glooModel?: string };
+      scripture?: { provider?: "ao" | "youversion"; bibleId?: string };
+    };
+    if (providers.ai) {
+      const provider = providers.ai.provider ?? next.configuration.providers.ai.provider;
+      next.configuration.providers.ai = {
+        ...next.configuration.providers.ai,
+        ...providers.ai,
+        provider,
+        model:
+          providers.ai.glooModel ?? providers.ai.model ?? next.configuration.providers.ai.model,
+        configured: provider === "openai" || provider === "gloo",
+      };
+    }
+    if (providers.scripture) {
+      const provider =
+        providers.scripture.provider ?? next.configuration.providers.scripture.provider;
+      next.configuration.providers.scripture = {
+        ...next.configuration.providers.scripture,
+        ...providers.scripture,
+        provider,
+        configured: provider === "ao",
+      };
+    }
+    return { status: withPublicDemoRuntime(next), body: { ok: true } };
+  }
+
+  if (path === "/api/control/deployments" && init?.method === "POST") {
+    const kind = body.kind as DestinationKind | undefined;
+    if (kind !== "discord" && kind !== "youtube-comments") {
+      throw new Error("This destination is not available in the public demo.");
+    }
+    if (next.configuration.deployments.some((deployment) => deployment.kind === kind)) {
+      throw new Error(
+        `The public demo already has a ${kind === "discord" ? "Discord" : "YouTube Comments"} destination.`,
+      );
+    }
+    const deployment = createPublicDemoDeployment(kind);
+    next.configuration.deployments.push(deployment);
+    return { status: withPublicDemoRuntime(next), body: { id: deployment.id } };
+  }
+
+  const deploymentMatch = path.match(/^\/api\/control\/deployments\/([^/]+)(?:\/(.+))?$/);
+  if (!deploymentMatch) throw new Error("That public demo action is not available.");
+  const deployment = next.configuration.deployments.find((item) => item.id === deploymentMatch[1]);
+  if (!deployment) throw new Error("This demo destination no longer exists.");
+  const action = deploymentMatch[2];
+
+  if (!action && init?.method === "PATCH") {
+    applyPublicDemoDeploymentUpdate(deployment, body);
+    return { status: withPublicDemoRuntime(next), body: { ok: true } };
+  }
+  if (action === "launch" && init?.method === "POST") {
+    deployment.state = "running";
+    return { status: withPublicDemoRuntime(next), body: { ok: true } };
+  }
+  if (action === "pause" && init?.method === "POST") {
+    deployment.state = "paused";
+    return { status: withPublicDemoRuntime(next), body: { ok: true } };
+  }
+  if (action === "youtube/videos" && (init?.method ?? "GET") === "GET") {
+    return { status: next, body: { videos: publicDemoVideos } };
+  }
+  if (action === "youtube/scan" && init?.method === "POST") {
+    const youtube = deployment.youtube;
+    if (youtube && !youtube.drafts.some((draft) => draft.id === "demo-draft-1")) {
+      youtube.drafts.push({
+        id: "demo-draft-1",
+        authorName: "Jordan M.",
+        commentText: "This gave me language for a hard week. Thank you.",
+        replyText: "Thank you for sharing that. I hope you find steady encouragement this week.",
+        status: "pending",
+      });
+    }
+    return { status: withPublicDemoRuntime(next), body: { ok: true } };
+  }
+  const draftMatch = action?.match(/^youtube\/drafts\/([^/]+)\/(approve|reject)$/);
+  if (draftMatch && init?.method === "POST") {
+    const draft = deployment.youtube?.drafts.find((item) => item.id === draftMatch[1]);
+    if (draft) draft.status = draftMatch[2] === "approve" ? "posted" : "rejected";
+    return { status: withPublicDemoRuntime(next), body: { ok: true } };
+  }
+  throw new Error("That public demo action is not available.");
+}
+
+function createPublicDemoDeployment(kind: "discord" | "youtube-comments"): Deployment {
+  if (kind === "discord") {
+    return {
+      id: "demo-discord-added",
+      kind,
+      name: "Community prayer room",
+      state: "draft",
+      configured: false,
+      discord: {
+        applicationIdConfigured: false,
+        botTokenConfigured: false,
+        guildIdConfigured: false,
+        channelIdConfigured: false,
+        participationMode: "shy",
+        quietSeconds: 20,
+      },
+    };
+  }
+  return {
+    id: "demo-youtube",
+    kind,
+    name: "YouTube Comments",
+    state: "draft",
+    configured: true,
+    youtube: {
+      channelId: "demo-channel",
+      channelName: "Threadlight Demo Channel",
+      selectedVideos: publicDemoVideos.slice(0, 1),
+      clientIdConfigured: true,
+      clientSecretConfigured: true,
+      refreshTokenConfigured: true,
+      replyMode: "review",
+      pollSeconds: 180,
+      dailyReplyLimit: 12,
+      replyCount: 0,
+      drafts: [],
+    },
+  };
+}
+
+function applyPublicDemoDeploymentUpdate(deployment: Deployment, body: Record<string, unknown>) {
+  const discord = body.discord as Record<string, unknown> | undefined;
+  if (deployment.discord && discord) {
+    deployment.discord = {
+      ...deployment.discord,
+      applicationIdConfigured:
+        deployment.discord.applicationIdConfigured || Boolean(discord.applicationId),
+      botTokenConfigured: deployment.discord.botTokenConfigured || Boolean(discord.botToken),
+      guildIdConfigured: deployment.discord.guildIdConfigured || Boolean(discord.guildId),
+      channelIdConfigured: deployment.discord.channelIdConfigured || Boolean(discord.channelId),
+      participationMode:
+        (discord.participationMode as Mode | undefined) ?? deployment.discord.participationMode,
+      quietSeconds: Number(discord.quietSeconds ?? deployment.discord.quietSeconds),
+    };
+    deployment.configured =
+      deployment.discord.applicationIdConfigured &&
+      deployment.discord.botTokenConfigured &&
+      deployment.discord.guildIdConfigured &&
+      deployment.discord.channelIdConfigured;
+  }
+  const youtube = body.youtube as Record<string, unknown> | undefined;
+  if (deployment.youtube && youtube) {
+    deployment.youtube = {
+      ...deployment.youtube,
+      ...(youtube as Partial<NonNullable<Deployment["youtube"]>>),
+    };
+  }
+}
+
+function requestBody(init: RequestInit | undefined): Record<string, unknown> {
+  if (typeof init?.body !== "string") return {};
+  try {
+    const parsed = JSON.parse(init.body);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function clonePublicDemoStatus(status: ControlStatus): ControlStatus {
+  return JSON.parse(JSON.stringify(status)) as ControlStatus;
+}
+
+function withPublicDemoRuntime(status: ControlStatus): ControlStatus {
+  return {
+    ...status,
+    runtime: {
+      deployments: status.configuration.deployments.map((deployment) => ({
+        id: deployment.id,
+        state: deployment.state,
+        ready: deployment.state === "running",
+      })),
+    },
+  };
+}
+
 export function App() {
-  const [status, setStatus] = useState<ControlStatus>();
+  const [publicDemo, setPublicDemo] = useState(
+    () => new URLSearchParams(window.location.search).get("demo") === "public",
+  );
+  const publicDemoStatus = useRef(createPublicDemoStatus());
+  const [status, setStatus] = useState<ControlStatus | undefined>(() =>
+    publicDemo ? publicDemoStatus.current : undefined,
+  );
   const [screen, setScreen] = useState<"home" | "choose" | "connect" | "launch" | "settings">(
     "choose",
   );
   const [selectedId, setSelectedId] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [controlAccessCode, setControlAccessCode] = useState("");
-  const [accessRequired, setAccessRequired] = useState(false);
-  const [showOperatorAccess, setShowOperatorAccess] = useState(false);
+
+  const publicDemoRequest = useCallback<ControlRequest>(async (url, init) => {
+    const result = await runPublicDemoControl(publicDemoStatus.current, url, init, (scenarioId) =>
+      request<ControlPreview>("/api/demo/respond", {
+        method: "POST",
+        body: JSON.stringify({ scenarioId }),
+      }),
+    );
+    publicDemoStatus.current = result.status;
+    setStatus(result.status);
+    return result.body as never;
+  }, []);
 
   const controlRequest = useCallback<ControlRequest>(
-    (url, init) => request(url, init, controlAccessCode),
-    [controlAccessCode],
+    (url, init) => (publicDemo ? publicDemoRequest(url, init) : request(url, init)),
+    [publicDemo, publicDemoRequest],
   );
 
   const refresh = useCallback(async () => {
@@ -235,7 +479,10 @@ export function App() {
       })
       .catch((reason: unknown) => {
         if (reason instanceof ControlAccessRequiredError) {
-          setAccessRequired(true);
+          const demo = publicDemoStatus.current;
+          setPublicDemo(true);
+          setStatus(demo);
+          setScreen("home");
           return;
         }
         setError(reason instanceof Error ? reason.message : "Unable to reach Threadlight.");
@@ -246,20 +493,6 @@ export function App() {
     () => status?.configuration.deployments.find((deployment) => deployment.id === selectedId),
     [selectedId, status],
   );
-
-  if (!status && accessRequired) {
-    if (!showOperatorAccess) return <PublicDemo onManage={() => setShowOperatorAccess(true)} />;
-    return (
-      <AccessCode
-        onSubmit={(value) => {
-          setError(undefined);
-          setAccessRequired(false);
-          setControlAccessCode(value);
-        }}
-        onPreview={() => setShowOperatorAccess(false)}
-      />
-    );
-  }
 
   const createDeployment = async (kind: DestinationKind) => {
     setBusy(true);
@@ -299,10 +532,24 @@ export function App() {
   return (
     <ControlRequestContext.Provider value={controlRequest}>
       <main className="app-shell">
-        <Header onSettings={() => setScreen("settings")} />
+        <Header
+          onSettings={() => setScreen("settings")}
+          context={publicDemo ? "Public demo workspace" : "Local control"}
+        />
+        {publicDemo && (
+          <p className="demo-workspace-note">
+            Public demo workspace. Changes stay in this browser and never post to Discord or
+            YouTube.
+          </p>
+        )}
         {error && <Notice text={error} />}
         {screen === "choose" && (
-          <ChooseDestination catalog={status.catalog} busy={busy} onChoose={createDeployment} />
+          <ChooseDestination
+            catalog={status.catalog}
+            busy={busy}
+            publicDemo={publicDemo}
+            onChoose={createDeployment}
+          />
         )}
         {screen === "connect" && selected && (
           <ConnectDestination
@@ -330,6 +577,7 @@ export function App() {
         {screen === "home" && (
           <LiveDashboard
             status={status}
+            publicDemo={publicDemo}
             onAdd={() => {
               setSelectedId(undefined);
               setScreen("choose");
@@ -364,48 +612,6 @@ export function App() {
   );
 }
 
-function AccessCode({
-  onSubmit,
-  onPreview,
-}: {
-  onSubmit: (value: string) => void;
-  onPreview: () => void;
-}) {
-  const [value, setValue] = useState("");
-  return (
-    <main className="app-shell">
-      <Header onSettings={() => undefined} />
-      <section className="wizard narrow">
-        <p className="eyebrow">Operator access</p>
-        <h1>Enter your access code.</h1>
-        <p className="lede">This remotely hosted Threadlight control surface is private.</p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (value.trim()) onSubmit(value.trim());
-          }}
-        >
-          <Field label="Access code">
-            <input
-              type="password"
-              autoComplete="off"
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              placeholder="Enter operator access code"
-            />
-          </Field>
-          <button className="primary" type="submit" disabled={!value.trim()}>
-            Continue <ArrowRight size={17} />
-          </button>
-        </form>
-        <button className="text-button" type="button" onClick={onPreview}>
-          Back to public preview
-        </button>
-      </section>
-    </main>
-  );
-}
-
 function Header({
   onSettings,
   context = "Local control",
@@ -429,121 +635,6 @@ function Header({
         </button>
       </div>
     </header>
-  );
-}
-
-function PublicDemo({ onManage }: { onManage: () => void }) {
-  const [scenarios, setScenarios] = useState<DemoScenario[]>([]);
-  const [selectedId, setSelectedId] = useState<string>();
-  const [preview, setPreview] = useState<ControlPreview>();
-  const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void request<{ scenarios: DemoScenario[] }>("/api/demo/scenarios")
-      .then((result) => {
-        if (cancelled) return;
-        setScenarios(result.scenarios);
-        setSelectedId(result.scenarios[0]?.id);
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled)
-          setError(reason instanceof Error ? reason.message : "Unable to load the public preview.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const selected = scenarios.find((scenario) => scenario.id === selectedId);
-  const run = async () => {
-    if (!selected) return;
-    setRunning(true);
-    setError(undefined);
-    try {
-      const result = await request<ControlPreview>("/api/demo/respond", {
-        method: "POST",
-        body: JSON.stringify({
-          scenarioId: selected.id,
-        }),
-      });
-      setPreview(result);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Threadlight could not form a response.");
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  return (
-    <main className="app-shell">
-      <Header onSettings={onManage} context="Public preview" />
-      <section className="wizard demo-panel">
-        <p className="eyebrow">Interactive preview</p>
-        <h1>See Threadlight in a real conversation.</h1>
-        <p className="lede">
-          Choose a community moment, then ask Threadlight for a brief, Scripture-grounded response.
-        </p>
-        {loading && <p className="status-note">Loading preview scenarios...</p>}
-        {error && <Notice text={error} />}
-        {scenarios.length > 0 && (
-          <fieldset className="scenario-list" aria-label="Preview scenarios">
-            {scenarios.map((scenario) => (
-              <button
-                className={`scenario-card ${scenario.id === selectedId ? "selected" : ""}`}
-                type="button"
-                key={scenario.id}
-                onClick={() => {
-                  setSelectedId(scenario.id);
-                  setPreview(undefined);
-                }}
-                aria-pressed={scenario.id === selectedId}
-              >
-                <strong>{scenario.label}</strong>
-                <small>{scenario.summary}</small>
-              </button>
-            ))}
-          </fieldset>
-        )}
-        {selected && (
-          <article className="demo-conversation">
-            <small className="draft-label">{selected.roomName}</small>
-            {selected.messages.map((message) => (
-              <p key={message.id}>
-                <strong>{message.author.name}</strong> {message.content}
-              </p>
-            ))}
-          </article>
-        )}
-        <button
-          className="primary"
-          type="button"
-          onClick={() => void run()}
-          disabled={!selected || running}
-        >
-          <Sparkles size={17} /> {running ? "Reflecting..." : "Try Threadlight"}
-        </button>
-        {preview?.reply && (
-          <article className="demo-response">
-            <small className="draft-label">Threadlight</small>
-            <p>{preview.reply.message}</p>
-            {preview.reply.passage && (
-              <small>
-                {preview.reply.passage.reference} · {preview.reply.passage.translation}
-              </small>
-            )}
-          </article>
-        )}
-        <button className="text-button operator-link" type="button" onClick={onManage}>
-          Manage this Threadlight <ArrowRight size={16} />
-        </button>
-      </section>
-    </main>
   );
 }
 
@@ -576,10 +667,12 @@ function Notice({ text }: { text: string }) {
 function ChooseDestination({
   catalog,
   busy,
+  publicDemo,
   onChoose,
 }: {
   catalog: ControlStatus["catalog"];
   busy: boolean;
+  publicDemo: boolean;
   onChoose: (kind: DestinationKind) => void;
 }) {
   return (
@@ -619,7 +712,9 @@ function ChooseDestination({
       </section>
       <p className="local-note">
         <LockKeyhole size={15} />
-        Keys and settings stay in your local Threadlight volume.
+        {publicDemo
+          ? "Demo changes stay in this browser and never connect to an account."
+          : "Keys and settings stay in your local Threadlight volume."}
       </p>
     </section>
   );
@@ -1449,11 +1544,13 @@ function SettingsPanel({
 
 function LiveDashboard({
   status,
+  publicDemo,
   onAdd,
   onOpen,
   onPause,
 }: {
   status: ControlStatus;
+  publicDemo: boolean;
   onAdd: () => void;
   onOpen: (deployment: Deployment) => void;
   onPause: (id: string) => Promise<void>;
@@ -1488,9 +1585,13 @@ function LiveDashboard({
     <section className="dashboard">
       <div className="dashboard-heading">
         <div>
-          <p className="eyebrow">Local control</p>
+          <p className="eyebrow">{publicDemo ? "Public demo workspace" : "Local control"}</p>
           <h1>Threadlight</h1>
-          <p className="lede">Your deployments stay on this machine.</p>
+          <p className="lede">
+            {publicDemo
+              ? "Explore the complete dashboard without changing a real deployment."
+              : "Your deployments stay on this machine."}
+          </p>
         </div>
         <button className="primary" type="button" onClick={onAdd}>
           Add destination <ArrowRight size={17} />
@@ -1592,7 +1693,9 @@ function LiveDashboard({
       </section>
       <div className="dashboard-foot">
         <LockKeyhole size={15} />
-        Configuration is stored in your local Threadlight volume.
+        {publicDemo
+          ? "Demo state is stored only in this browser tab."
+          : "Configuration is stored in your local Threadlight volume."}
       </div>
     </section>
   );

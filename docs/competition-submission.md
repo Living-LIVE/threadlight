@@ -15,7 +15,7 @@ YouVersion retrieval until its passage canary succeeds.
 | Submission surface | Prepared artifact | Owner action |
 | --- | --- | --- |
 | Source code | [GitHub repository](https://github.com/Living-LIVE/threadlight) | Submit this repository URL. |
-| Hosted dashboard | [Threadlight dashboard](https://threadlight.vercel.app) | Visitors can use the no-login public preview; use the operator code only for a configuration walkthrough. |
+| Hosted dashboard | [Threadlight dashboard](https://threadlight.vercel.app) | Visitors can use the no-login full public workspace. It simulates the complete dashboard without accessing the operator's real configuration or publishing externally. |
 | Kaggle notebook | [Notebook instructions](../notebook/README.md) and `notebook/threadlight_demo.ipynb` | Publish the notebook and add its URL below. |
 | Demo video | Demo script below | Record/upload and add its public URL below. |
 | Cover image and media gallery | [Prepared gallery assets](competition-assets.md), plus a controlled Discord/YouTube walkthrough | Upload to the competition form. |
@@ -44,10 +44,10 @@ lightweight local control dashboard.
 Target length: 2 minutes 30 seconds to 3 minutes.
 
 1. Open with the problem: care, reflection, and Scripture are often disconnected from the moment people need them.
-2. Start in the no-login public preview, run a bounded Gloo and Scripture response, and point out the attributed passage and provider trace.
-3. Choose Discord and explain Prompted, Attentive, and Active presence, then show a sourced interaction.
-4. Show YouTube setup: connect the owner Google account and choose a small allowlist of videos.
-5. Show the review queue: a controlled comment produces a draft, with caps and safety suppression before any public post.
+2. Start in the no-login public workspace, run a bounded Gloo and Scripture response, and point out the attributed passage and provider trace.
+3. Open Discord and explain Prompted, Attentive, and Active presence, then show launch and pause controls.
+4. Add YouTube Comments, choose a small allowlist of videos, and show that public-demo actions stay in the browser.
+5. Show the review queue: a simulated controlled comment produces a draft, with caps and safety suppression before any public post.
 6. Close with the build story: an open-source reference implementation that works inside existing community habits.
 
 ## Pre-Submission Checklist

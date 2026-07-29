@@ -62,12 +62,16 @@ then set the runtime's `WEB_ORIGIN` to the Vercel deployment URL so browser requ
 returns use the same operator surface. A remote runtime also requires a 32-byte-or-longer
 `THREADLIGHT_CONTROL_TOKEN`; generate it with `openssl rand -hex 32`, configure it only in the
 runtime environment, and enter it in the dashboard when prompted. The access code stays only in
-the browser's current memory and is never bundled into the Vercel build. The public preview does
-not require a login and never exposes configuration, OAuth, drafts, or posting controls. To let
-visitors run the bounded live preview, deliberately configure `THREADLIGHT_DEMO_ENABLED=true`.
-That endpoint only runs server-owned, curated scenarios through the saved AI and Scripture provider
-pair, and is rate-limited to five responses per IP per minute. Enable it only when provider usage
-for public demonstration is intended.
+the browser's current memory and is never bundled into the Vercel build.
+
+When a visitor opens a protected remote dashboard without that code, Threadlight presents the full
+dashboard as a browser-isolated public demo workspace. Visitors can move through provider settings,
+Discord and YouTube setup, launch and pause controls, video selection, and draft review. Those
+changes exist only in that browser tab: they never reveal real configuration, initiate OAuth, poll
+channels, or post to Discord or YouTube. Provider preview remains deliberately bounded: configure
+`THREADLIGHT_DEMO_ENABLED=true` only when public provider usage is intended. That endpoint runs
+server-owned curated scenarios through the saved AI and Scripture provider pair and is rate-limited
+to five responses per IP per minute.
 
 ### Local Development
 

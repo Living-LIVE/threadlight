@@ -24,9 +24,11 @@ hosted multi-tenant service.
 - A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
   operator dashboard through `VITE_THREADLIGHT_API_ORIGIN`; it is not a replacement for the
   persistent gateway and poller runtime.
-- A no-login public preview that shows curated conversation scenarios and, when the operator
-  deliberately enables the bounded demo endpoint, can run a live reflection without exposing
-  Threadlight configuration or deployment controls.
+- A no-login public demo workspace that exposes the full dashboard interaction model without
+  exposing or changing the operator's real configuration. Provider settings, Discord and YouTube
+  setup, launch and pause controls, video selection, and draft review are browser-isolated.
+  A bounded provider preview can run a live reflection only when the operator deliberately enables
+  the public demo endpoint.
 - A provider-neutral core so channel and provider adapters can be added without coupling them to
   the dashboard.
 
@@ -57,10 +59,11 @@ not be described as available in demos, issues, or release notes.
 - Docker binds to loopback by default. Remote control requires `THREADLIGHT_CONTROL_TOKEN` and
   should also sit behind an authenticated proxy owned by the operator. Railway production now has
   that token configured: remote configuration, OAuth, drafts, and posting routes return `401`
-  without it. The public preview remains intentionally available without that code; its live
-  response uses the saved Gloo plus AO Lab provider pair and requires `THREADLIGHT_DEMO_ENABLED=true`.
-  The first anonymous scenario and a second warm scenario both returned `200` on 2026-07-29;
-  details are recorded in the [public demo recovery ledger](qa/2026-07-29-public-demo-recovery.md).
+  without it. The public dashboard falls back to a browser-isolated full demo workspace without
+  that code. Its bounded provider preview uses the saved Gloo plus AO Lab provider pair and
+  requires `THREADLIGHT_DEMO_ENABLED=true`. The first anonymous scenario and a second warm scenario
+  both returned `200` on 2026-07-29; details are recorded in the
+  [public demo recovery ledger](qa/2026-07-29-public-demo-recovery.md).
 - The current Docker image passed an exact-source build and isolated container health/control API
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 
