@@ -45,3 +45,6 @@ authentication or completion handling, not in the public-demo or control-token b
 - The first post-deploy request still returned a transient `502`; an immediate second request
   returned `200` with Gloo plus AO Lab in 7.6 seconds. The bounded retry closes that cold-path
   gap without permitting arbitrary prompts or exposing a fixture fallback.
+- The first request after the retry deployment exposed the underlying Gloo edge case: a tool call
+  omitted the required internal `reason` field. The provider now normalizes that omission from
+  the already-required pastoral intent and has a focused regression test.

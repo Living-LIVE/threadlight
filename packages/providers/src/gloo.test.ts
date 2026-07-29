@@ -124,4 +124,48 @@ describe("GlooProvider", () => {
       carePrompt: null,
     });
   });
+
+  it("uses pastoral intent when Gloo omits the internal reason field", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        action: "respond",
+                        riskLevel: "normal",
+                        pastoralIntent: "Acknowledge the person's grief with steady care.",
+                        scriptureRequest: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+
+    await expect(
+      provider.discern({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "explicit",
+      }),
+    ).resolves.toMatchObject({
+      reason: "Acknowledge the person's grief with steady care.",
+      pastoralIntent: "Acknowledge the person's grief with steady care.",
+    });
+  });
 });
