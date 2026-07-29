@@ -132,9 +132,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     bodyLimit: 64 * 1024,
   });
   const controlPreviewLimiter = new MemoryRateLimiter(20, 60_000);
-  const publicDemoLimiter = new MemoryRateLimiter(5, 60_000);
+  // Allow a judge to run each curated scenario without exposing arbitrary prompt generation.
+  const publicDemoLimiter = new MemoryRateLimiter(12, 60_000);
   const youtube = new YouTubeClient();
   const controlRuntimeFactory = options.controlRuntimeFactory ?? createControlRuntime;
+  let cachedPublicDemoRuntime:
+    | { config: LocalControlConfig; runtime: ThreadlightOrchestrator }
+    | undefined;
+
+  const getPublicDemoRuntime = async () => {
+    if (!options.controlStore) return options.orchestrator;
+    const savedConfig = await options.controlStore.load();
+    if (cachedPublicDemoRuntime?.config === savedConfig) return cachedPublicDemoRuntime.runtime;
+    const runtime = controlRuntimeFactory(savedConfig);
+    cachedPublicDemoRuntime = { config: savedConfig, runtime };
+    return runtime;
+  };
 
   await app.register(cors, {
     origin: options.config.WEB_ORIGIN,
@@ -655,9 +668,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
 
     try {
-      const runtime = controlStore
-        ? controlRuntimeFactory(await controlStore.load())
-        : options.orchestrator;
+      const runtime = await getPublicDemoRuntime();
       const result = await runtime.respond({
         context: {
           channelId: `demo:${scenario.id}`,

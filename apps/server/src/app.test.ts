@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { DEMO_SCENARIOS, DefaultThreadlightOrchestrator } from "@threadlight/core";
 import { FixtureAIProvider, FixtureScriptureProvider } from "@threadlight/providers";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
+import { createDefaultControlConfig, LocalControlStore } from "./control.js";
 import { loadConfig } from "./env.js";
 
 const openApps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
@@ -180,5 +182,63 @@ describe("Threadlight API", () => {
         scriptureProvider: "fixture-scripture",
       },
     });
+  });
+
+  it("reuses the saved provider runtime until its configuration changes", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+      THREADLIGHT_CONTROL_TOKEN: "a".repeat(32),
+      THREADLIGHT_DEMO_ENABLED: "true",
+    });
+    const store = new LocalControlStore(`.threadlight/public-demo-${randomUUID()}.json`, () =>
+      createDefaultControlConfig({
+        AI_PROVIDER: "openai",
+        OPENAI_API_KEY: "test-key",
+        SCRIPTURE_PROVIDER: "ao",
+      }),
+    );
+    const orchestrator = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    let runtimeFactoryCalls = 0;
+    const app = await buildApp({
+      config,
+      orchestrator,
+      controlStore: store,
+      controlRuntimeFactory: () => {
+        runtimeFactoryCalls += 1;
+        return orchestrator;
+      },
+      logger: false,
+    });
+    openApps.push(app);
+    const scenario = DEMO_SCENARIOS[0];
+    if (!scenario) throw new Error("Expected a demo scenario");
+
+    const request = () =>
+      app.inject({
+        method: "POST",
+        url: "/api/demo/respond",
+        payload: { scenarioId: scenario.id },
+      });
+
+    expect((await request()).statusCode).toBe(200);
+    expect((await request()).statusCode).toBe(200);
+    expect(runtimeFactoryCalls).toBe(1);
+
+    await store.update((saved) => ({
+      ...saved,
+      providers: {
+        ...saved.providers,
+        ai: { ...saved.providers.ai, model: "gpt-4.1" },
+      },
+    }));
+
+    expect((await request()).statusCode).toBe(200);
+    expect(runtimeFactoryCalls).toBe(2);
   });
 });
