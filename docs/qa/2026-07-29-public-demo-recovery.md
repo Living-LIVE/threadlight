@@ -7,7 +7,12 @@ deployment controls, and YouTube publishing operator-protected.
 
 ## Scope and Boundaries
 
-- Public: `GET /api/demo/scenarios` and curated `POST /api/demo/respond` requests only.
+- Public dashboard: the complete Threadlight dashboard runs as a browser-isolated workspace when
+  the hosted control API requires an operator token. Visitors can explore provider settings,
+  Discord and YouTube configuration, launch and pause controls, video selection, and draft review.
+  Those operations do not call or mutate the real hosted control API.
+- Public API: curated `POST /api/demo/respond` requests only. The dashboard maps a preview request
+  to a server-owned scenario; arbitrary prompt bodies are still rejected.
 - Protected: `/api/control/*`, including provider configuration and deployment actions, requires
   `THREADLIGHT_CONTROL_TOKEN` on the hosted service.
 - No public access code is required or issued.
@@ -63,7 +68,10 @@ authentication or completion handling, not in the public-demo or control-token b
 | Anonymous control status | `401 control_access_required` | 2026-07-29 |
 | Arbitrary public prompt body | `400 invalid_request` | 2026-07-29 |
 | Vercel dashboard shell | `200` | 2026-07-29 |
+| Full Vercel public workspace | `200`: simulated Discord and YouTube setup, launch, and bounded provider preview | 2026-07-29 |
+| Public workspace remote calls | `GET /api/control/status` (`401`) then curated `POST /api/demo/respond` (`200`); no deployment mutation calls | 2026-07-29 |
 
 Judges need no access code. The public dashboard is [threadlight.vercel.app](https://threadlight.vercel.app)
-and its curated public demo uses the Railway runtime. The operator token remains restricted to
-configuration, OAuth, draft review, and publishing routes.
+and its full browser-isolated public workspace uses the Railway runtime only for the bounded
+provider preview. The operator token remains restricted to configuration, OAuth, draft review, and
+publishing routes.
