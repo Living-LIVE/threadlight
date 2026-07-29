@@ -68,8 +68,8 @@ authentication or completion handling, not in the public-demo or control-token b
 | Anonymous control status | `401 control_access_required` | 2026-07-29 |
 | Arbitrary public prompt body | `400 invalid_request` | 2026-07-29 |
 | Vercel dashboard shell | `200` | 2026-07-29 |
-| Full Vercel public workspace | `200`: simulated Discord and YouTube setup, launch, and bounded provider preview | 2026-07-29 |
-| Public workspace remote calls | `GET /api/control/status` (`401`) then curated `POST /api/demo/respond` (`200`); no deployment mutation calls | 2026-07-29 |
+| Full Vercel public workspace | `200`: simulated provider settings, Discord and YouTube setup, launch, and bounded provider preview | 2026-07-29 |
+| Public workspace remote calls | `GET /api/control/status` (`401`) then curated `POST /api/demo/respond` (`200`); no provider or deployment mutation calls | 2026-07-29 |
 
 Judges need no access code. The public dashboard is [threadlight.vercel.app](https://threadlight.vercel.app)
 and its full browser-isolated public workspace uses the Railway runtime only for the bounded
