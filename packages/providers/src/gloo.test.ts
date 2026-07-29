@@ -168,4 +168,50 @@ describe("GlooProvider", () => {
       pastoralIntent: "Acknowledge the person's grief with steady care.",
     });
   });
+
+  it("bounds verbose internal discernment metadata to the schema limit", async () => {
+    const longText = "a".repeat(300);
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        action: "respond",
+                        riskLevel: "normal",
+                        reason: longText,
+                        pastoralIntent: longText,
+                        scriptureRequest: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+
+    await expect(
+      provider.discern({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "explicit",
+      }),
+    ).resolves.toMatchObject({
+      reason: "a".repeat(240),
+      pastoralIntent: "a".repeat(240),
+    });
+  });
 });

@@ -48,3 +48,6 @@ authentication or completion handling, not in the public-demo or control-token b
 - The first request after the retry deployment exposed the underlying Gloo edge case: a tool call
   omitted the required internal `reason` field. The provider now normalizes that omission from
   the already-required pastoral intent and has a focused regression test.
+- A subsequent live check showed the same two metadata fields can exceed their 240-character
+  schema maximum. Gloo normalization now bounds both values before validation; this does not
+  change the user-facing reply content.

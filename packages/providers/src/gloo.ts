@@ -233,9 +233,9 @@ function normalizeDiscernment(value: unknown): unknown {
   const decision = record(value);
   if (!decision) return value;
   const scriptureRequest = record(decision.scriptureRequest);
-  const suppliedReason = nonEmptyText(decision.reason) ?? nonEmptyText(decision.rationale);
+  const suppliedReason = boundedText(decision.reason, 240) ?? boundedText(decision.rationale, 240);
   const pastoralIntent =
-    nonEmptyText(decision.pastoralIntent) ??
+    boundedText(decision.pastoralIntent, 240) ??
     suppliedReason ??
     "Offer a concise, compassionate response appropriate to the conversation.";
   const riskLevel =
@@ -259,8 +259,10 @@ function normalizeDiscernment(value: unknown): unknown {
   };
 }
 
-function nonEmptyText(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+function boundedText(value: unknown, maximum: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().slice(0, maximum).trim();
+  return normalized || undefined;
 }
 
 function normalizeReply(value: unknown): unknown {
