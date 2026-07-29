@@ -15,7 +15,7 @@ YouVersion retrieval until its passage canary succeeds.
 | Submission surface | Prepared artifact | Owner action |
 | --- | --- | --- |
 | Source code | [GitHub repository](https://github.com/Living-LIVE/threadlight) | Submit this repository URL. |
-| Hosted dashboard | [Threadlight dashboard](https://threadlight.vercel.app) | Visitors can use the no-login full public workspace, open the live Discord/YouTube destinations, and observe sanitized activity without gaining operator access. |
+| Hosted dashboard | [Threadlight live dashboard](https://threadlight-production.up.railway.app/?demo=public) | Visitors can use the no-login full public workspace, open the live Discord/YouTube destinations, and observe sanitized activity without gaining operator access. |
 | Kaggle notebook | [Notebook instructions](../notebook/README.md) and `notebook/threadlight_demo.ipynb` | Publish the notebook and add its URL below. |
 | Demo video | Demo script below | Record/upload and add its public URL below. |
 | Cover image and media gallery | [Prepared gallery assets](competition-assets.md), plus a controlled Discord/YouTube walkthrough | Upload to the competition form. |
@@ -56,9 +56,9 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 - [x] Controlled YouTube test video selected and manual scan verified.
 - [x] One owner-approved reply canary completed on the test video.
 - [x] Gloo provider configured and demonstrated in the dashboard/runtime.
-- [ ] Hosted Discord runtime launched against the dedicated demo thread.
+- [x] Hosted Discord runtime launched against the dedicated demo thread.
 - [ ] Public Discord invite added to the live dashboard.
-- [ ] Hosted public activity and protected control boundaries reverified after deployment.
+- [x] Hosted public activity and protected control boundaries reverified after deployment.
 - [ ] Valid YouVersion App Key installed and one attributed Scripture retrieval verified.
 - [ ] Kaggle notebook published and its URL recorded above.
 - [ ] Demo video, cover image, and gallery uploaded.

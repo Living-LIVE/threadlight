@@ -75,3 +75,11 @@ Judges need no access code. The public dashboard is [threadlight.vercel.app](htt
 and its full browser-isolated public workspace uses the Railway runtime only for the bounded
 provider preview. The operator token remains restricted to configuration, OAuth, draft review, and
 publishing routes.
+
+## Superseded Public Entry Point
+
+Later on 2026-07-29, the full public experience moved to
+`https://threadlight-production.up.railway.app/?demo=public`. Railway now serves the bundled app,
+real Discord and YouTube runtime status, and the bounded connector activity feed. See
+[the public live console ledger](2026-07-29-public-live-console.md). The Vercel evidence above is
+retained as a historical checkpoint.

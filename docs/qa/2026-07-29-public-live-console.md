@@ -13,7 +13,7 @@ connector health, and see bounded message outcomes without gaining operator acce
 - Repository: `https://github.com/Living-LIVE/threadlight`
 - Branch: `codex/build-threadlight`
 - Baseline: `f9b17f9`
-- Hosted UI: `https://threadlight.vercel.app`
+- Hosted UI: `https://threadlight-production.up.railway.app/?demo=public`
 - Hosted runtime: `https://threadlight-production.up.railway.app`
 - Discord boundary: Live Tapestry `threadlight-live-test`
 - YouTube boundary: `We Paint!`
@@ -55,11 +55,18 @@ connector health, and see bounded message outcomes without gaining operator acce
 
 ## Hosted Activation
 
-Pending until the source is committed and deployed:
+- Revision `aba1f77` deployed successfully to Railway production.
+- Railway activity volume path is `/data/threadlight-activity.json`.
+- Discord is running and ready in Prompted mode against `threadlight-live-test`.
+- YouTube is running and ready in review mode against `We Paint!`.
+- Anonymous `/api/demo/live` returns `200`.
+- Anonymous `/api/control/status` returns `401`.
+- The no-login hosted dashboard renders both live connectors and the activity feed with no browser
+  console errors when opened with `?demo=public`.
+- A real Discord mention produced an observed event, a Gloo plus AO Lab response, and a posted
+  Psalm 27:14 reply. Both events appeared in the hosted dashboard.
+- Public Discord invite remains pending action-time approval.
 
-- Configure the Railway activity volume path.
-- Launch the hosted Discord deployment against `threadlight-live-test`.
-- Verify hosted Discord and YouTube runtime readiness.
-- Add a public Discord invite after action-time approval.
-- Verify Vercel live console, anonymous Railway live API, and protected Railway control API.
-
+Vercel was not written during this release. The local project link exists, but Threadlight has no
+entry in the approved Vercel deployment registry, so the required fail-closed target verifier
+blocked deployment. Railway serves the complete bundled app and is the submission demo URL.

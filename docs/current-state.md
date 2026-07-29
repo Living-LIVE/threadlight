@@ -66,6 +66,10 @@ not be described as available in demos, issues, or release notes.
   [public demo recovery ledger](qa/2026-07-29-public-demo-recovery.md).
 - The current Docker image passed an exact-source build and isolated container health/control API
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
+- Railway production serves the complete bundled public app at
+  `https://threadlight-production.up.railway.app/?demo=public`. Discord and YouTube are both ready,
+  and a hosted Discord mention-and-response canary appears in the public activity ledger. Vercel
+  was not updated because Threadlight is not yet registered in the required Vercel target registry.
 
 ## Verification
 
