@@ -1,3 +1,4 @@
+import { ActivityStore } from "./activity.js";
 import { buildApp } from "./app.js";
 import { createDefaultControlConfig, LocalControlStore } from "./control.js";
 import { loadConfig } from "./env.js";
@@ -8,7 +9,8 @@ const config = loadConfig();
 const controlStore = new LocalControlStore(config.THREADLIGHT_CONFIG_PATH, () =>
   createDefaultControlConfig(process.env),
 );
-const runtimeManager = new ThreadlightRuntimeManager(controlStore);
+const activityStore = new ActivityStore(config.THREADLIGHT_ACTIVITY_PATH);
+const runtimeManager = new ThreadlightRuntimeManager(controlStore, { activity: activityStore });
 const runtimeStatus = async () => {
   const control = await controlStore.load();
   const discordDeployment = control.deployments.find((deployment) => deployment.kind === "discord");
@@ -32,6 +34,7 @@ const app = await buildApp({
   controlStore,
   runtimeManager,
   runtimeStatus,
+  activityStore,
 });
 
 let shuttingDown = false;

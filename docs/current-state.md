@@ -24,11 +24,10 @@ hosted multi-tenant service.
 - A Railway hosted-runtime checkpoint for the containerized service. Vercel can host a separate
   operator dashboard through `VITE_THREADLIGHT_API_ORIGIN`; it is not a replacement for the
   persistent gateway and poller runtime.
-- A no-login public demo workspace that exposes the full dashboard interaction model without
-  exposing or changing the operator's real configuration. Provider settings, Discord and YouTube
-  setup, launch and pause controls, video selection, and draft review are browser-isolated.
-  A bounded provider preview can run a live reflection only when the operator deliberately enables
-  the public demo endpoint.
+- A no-login public live workspace that exposes sanitized connector health, operator-selected
+  Discord and YouTube links, bounded recent activity, and public-safe error summaries. Operator
+  actions remain protected. Provider settings, connector setup, launch and pause controls, video
+  selection, and draft review remain browser-isolated in the configuration playground.
 - A provider-neutral core so channel and provider adapters can be added without coupling them to
   the dashboard.
 
@@ -48,8 +47,9 @@ not be described as available in demos, issues, or release notes.
 - One Discord deployment and one YouTube Comments deployment may run in one Threadlight process
   today.
 - Operators must supply their own Discord and provider credentials.
-- Threadlight does not persist Discord conversation history. Pending YouTube review drafts retain
-  bounded comment and reply excerpts in the local configuration volume until resolved.
+- Threadlight persists a bounded 200-event connector ledger for the live dashboard, not full
+  conversation history. Pending YouTube review drafts retain bounded comment and reply excerpts in
+  the local configuration volume until resolved.
 - YouTube Comments has completed live Google OAuth, owner-comment suppression, and one controlled
   non-owner review-draft and approved-threaded-reply canary on the selected `We Paint!` video.
   This proves the one-comment happy path only; it is not a broad moderation or safety evaluation.

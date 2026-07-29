@@ -16,6 +16,7 @@ import {
   PermissionFlagsBits,
   type TextBasedChannel,
 } from "discord.js";
+import type { ActivityInput, ActivityRecorder } from "../activity.js";
 
 import {
   ASK_THREADLIGHT_CONTEXT_NAME,
@@ -156,6 +157,7 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
     config: DiscordGatewayConfig,
     orchestrator: ThreadlightOrchestrator,
     logger?: DiscordGatewayLogger,
+    private readonly activity?: ActivityRecorder,
   ) {
     this.config = {
       ...config,
@@ -289,7 +291,24 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
 
     const prompt = extractMentionPrompt(message.content, this.client.user.id);
     if (prompt) {
-      if (this.isOnCooldown(message.author.id)) return;
+      await this.record({
+        source: "discord",
+        status: "observed",
+        sourceId: message.id,
+        actor: message.member?.displayName ?? message.author.username,
+        input: prompt,
+        destination: message.channelId,
+      });
+      if (this.isOnCooldown(message.author.id)) {
+        await this.record({
+          source: "discord",
+          status: "skipped",
+          sourceId: message.id,
+          reason: "The requester is inside the explicit-response cooldown.",
+          destination: message.channelId,
+        });
+        return;
+      }
       this.startCooldown(message.author.id);
       const disposition = this.participation.handleExplicit({
         id: message.id,
@@ -297,6 +316,13 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
         execute: (trigger) => this.respondToMessage(message, prompt, trigger),
       });
       if (disposition === "queue-full") {
+        await this.record({
+          source: "discord",
+          status: "skipped",
+          sourceId: message.id,
+          reason: "The Discord response queue was full.",
+          destination: message.channelId,
+        });
         await message
           .reply({ content: QUEUE_FULL_MESSAGE, allowedMentions: { parse: [] } })
           .catch(() => undefined);
@@ -305,13 +331,48 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
     }
 
     if (!message.content.trim()) return;
+    await this.record({
+      source: "discord",
+      status: "observed",
+      sourceId: message.id,
+      actor: message.member?.displayName ?? message.author.username,
+      input: message.content,
+      destination: message.channelId,
+    });
     const disposition = this.participation.handle({
       id: message.id,
       conversationId: message.channelId,
       urgent: assessImmediateSafety(message.content).riskLevel === "urgent",
       execute: (trigger) => this.respondToMessage(message, message.content, trigger),
     });
+    if (disposition === "ignored") {
+      await this.record({
+        source: "discord",
+        status: "skipped",
+        sourceId: message.id,
+        reason: "Prompted mode requires a direct mention or command.",
+        destination: message.channelId,
+      });
+    } else if (disposition === "scheduled") {
+      await this.record({
+        source: "discord",
+        status: "queued",
+        sourceId: message.id,
+        reason:
+          this.participation.status.mode === "medium"
+            ? "Waiting for the attentive-mode quiet window."
+            : "Queued for an active-mode response.",
+        destination: message.channelId,
+      });
+    }
     if (disposition === "queue-full" && this.participation.status.mode === "high") {
+      await this.record({
+        source: "discord",
+        status: "skipped",
+        sourceId: message.id,
+        reason: "The Discord response queue was full.",
+        destination: message.channelId,
+      });
       await message
         .reply({ content: QUEUE_FULL_MESSAGE, allowedMentions: { parse: [] } })
         .catch(() => undefined);
@@ -341,15 +402,46 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
         source: "discord",
         trigger,
       });
-      if (!result.reply) return false;
+      if (!result.reply) {
+        await this.record({
+          source: "discord",
+          status: "skipped",
+          sourceId: message.id,
+          reason: result.decision.reason,
+          destination: message.channelId,
+          provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+          durationMs: result.trace.totalMs,
+        });
+        return false;
+      }
 
       await message.reply({
         embeds: formatThreadlightResponse(result),
         allowedMentions: { parse: [] },
       });
+      await this.record({
+        source: "discord",
+        status: "responded",
+        sourceId: message.id,
+        actor: message.member?.displayName ?? message.author.username,
+        input: prompt,
+        output: result.reply.message,
+        destination: message.channelId,
+        reference: result.reply.passage?.reference,
+        provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+        durationMs: result.trace.totalMs,
+      });
       return true;
     } catch {
       this.logger.error("Discord message handling failed");
+      await this.record({
+        source: "discord",
+        status: "error",
+        sourceId: message.id,
+        input: prompt,
+        reason: "Threadlight could not complete or post the Discord response.",
+        destination: message.channelId,
+      });
       return message
         .reply({ content: GENERIC_ERROR_MESSAGE, allowedMentions: { parse: [] } })
         .then(() => true)
@@ -440,6 +532,15 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
         ...(request.intent ? { intent: request.intent } : {}),
       });
       if (!result.reply) {
+        await this.record({
+          source: "discord",
+          status: "skipped",
+          sourceId: interaction.id,
+          reason: result.decision.reason,
+          destination: interaction.channelId,
+          provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+          durationMs: result.trace.totalMs,
+        });
         await interaction.deleteReply();
         return false;
       }
@@ -448,14 +549,38 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
         embeds: formatThreadlightResponse(result),
         allowedMentions: { parse: [] },
       });
+      await this.record({
+        source: "discord",
+        status: "responded",
+        sourceId: interaction.id,
+        actor: interaction.user.globalName ?? interaction.user.username,
+        input: request.prompt,
+        output: result.reply.message,
+        destination: interaction.channelId,
+        reference: result.reply.passage?.reference,
+        provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+        durationMs: result.trace.totalMs,
+      });
       return true;
     } catch {
       this.logger.error("Discord interaction handling failed");
+      await this.record({
+        source: "discord",
+        status: "error",
+        sourceId: interaction.id,
+        input: request.prompt,
+        reason: "Threadlight could not complete or post the Discord interaction response.",
+        destination: interaction.channelId,
+      });
       return interaction
         .editReply({ content: GENERIC_ERROR_MESSAGE, allowedMentions: { parse: [] } })
         .then(() => true)
         .catch(() => false);
     }
+  }
+
+  private record(input: ActivityInput): Promise<void> {
+    return this.activity?.record(input).catch(() => undefined) ?? Promise.resolve();
   }
 
   private async handleModeCommand(interaction: ChatInputCommandInteraction): Promise<void> {

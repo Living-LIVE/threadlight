@@ -6,8 +6,10 @@ import {
   Flame,
   LockKeyhole,
   MessageCircle,
+  MessageSquareWarning,
   Play,
   Radio,
+  RefreshCw,
   Settings2,
   Sparkles,
   Users,
@@ -118,6 +120,61 @@ export type ControlPreview = {
   };
   decision: { action: string; reason: string };
   trace: { aiProvider: string; scriptureProvider: string; totalMs: number };
+};
+
+type PublicLiveStatus = {
+  generatedAt: string;
+  discord: {
+    configured: boolean;
+    ready: boolean;
+    state: string;
+    name: string;
+    participationMode?: Mode;
+    participationLabel?: string;
+    inviteUrl?: string;
+    openUrl?: string;
+    widgetUrl?: string;
+    message?: string;
+  };
+  youtube: {
+    configured: boolean;
+    ready: boolean;
+    state: string;
+    name: string;
+    channelName?: string;
+    channelUrl?: string;
+    replyMode?: "review" | "selective" | "high-touch";
+    replyPolicy?: string;
+    lastPollAt?: string;
+    lastError?: string;
+    lastSafetyAlert?: string;
+    replyCount: number;
+    dailyReplyLimit?: number;
+    selectedVideos: Array<{ title: string; thumbnailUrl?: string; url: string }>;
+    recentComments: Array<{
+      authorName: string;
+      commentText: string;
+      replyText: string;
+      status: "pending" | "posted" | "rejected" | "skipped" | "failed";
+      videoTitle?: string;
+      createdAt: string;
+      resolvedAt?: string;
+      error?: string;
+    }>;
+  };
+  activity: Array<{
+    id: string;
+    createdAt: string;
+    source: "discord" | "youtube";
+    status: "observed" | "queued" | "responded" | "drafted" | "posted" | "skipped" | "error";
+    actor?: string;
+    input?: string;
+    output?: string;
+    reason?: string;
+    reference?: string;
+    provider?: string;
+    durationMs?: number;
+  }>;
 };
 
 const icons = {
@@ -568,8 +625,8 @@ export function App() {
         />
         {publicDemo && (
           <p className="demo-workspace-note">
-            Public demo workspace. Changes stay in this browser and never post to Discord or
-            YouTube.
+            Live destinations are read-only here. Join Discord or open the YouTube test video to
+            interact; setup changes stay in this browser.
           </p>
         )}
         {error && <Notice text={error} />}
@@ -1748,7 +1805,7 @@ function LiveDashboard({
           <h1>Threadlight</h1>
           <p className="lede">
             {publicDemo
-              ? "Explore the complete dashboard without changing a real deployment."
+              ? "See the live deployments, then try the configuration flow."
               : "Your deployments stay on this machine."}
           </p>
         </div>
@@ -1756,9 +1813,10 @@ function LiveDashboard({
           Add destination <ArrowRight size={17} />
         </button>
       </div>
+      {publicDemo && <PublicLiveConsole />}
       <section className="deployment-list">
         <div className="list-title">
-          <h2>Destinations</h2>
+          <h2>{publicDemo ? "Configuration playground" : "Destinations"}</h2>
           <span>{status.configuration.deployments.length}</span>
         </div>
         {status.configuration.deployments.map((deployment) => {
@@ -1858,6 +1916,238 @@ function LiveDashboard({
       </div>
     </section>
   );
+}
+
+function PublicLiveConsole() {
+  const [live, setLive] = useState<PublicLiveStatus>();
+  const [error, setError] = useState<string>();
+  const [refreshing, setRefreshing] = useState(false);
+  const load = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true);
+    try {
+      setLive(await request<PublicLiveStatus>("/api/demo/live"));
+      setError(undefined);
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Live status is temporarily unavailable.",
+      );
+    } finally {
+      if (manual) setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [load]);
+
+  const errors = live
+    ? [
+        live.discord.message,
+        live.youtube.lastError,
+        ...live.activity.filter((event) => event.status === "error").map((event) => event.reason),
+      ].filter((value): value is string => Boolean(value))
+    : [];
+
+  return (
+    <section className="live-console" aria-labelledby="live-console-heading">
+      <div className="live-console-heading">
+        <div>
+          <p className="eyebrow">Live demo</p>
+          <h2 id="live-console-heading">Watch Threadlight work.</h2>
+          <p>Join the demo conversation or open the selected video. Activity refreshes live.</p>
+        </div>
+        <button
+          className="icon-button"
+          type="button"
+          aria-label="Refresh live activity"
+          disabled={refreshing}
+          onClick={() => void load(true)}
+        >
+          <RefreshCw size={17} className={refreshing ? "spin" : undefined} />
+        </button>
+      </div>
+      {error && <p className="live-error">{error}</p>}
+      {!live && !error && <p className="live-loading">Loading live destinations...</p>}
+      {live && (
+        <>
+          <div className="live-destinations">
+            <article className="live-destination">
+              <div className="live-destination-title">
+                <span className="route-icon">
+                  <MessageCircle size={20} />
+                </span>
+                <div>
+                  <strong>{live.discord.name}</strong>
+                  <small>{live.discord.participationLabel ?? "Not configured"}</small>
+                </div>
+                <LiveState ready={live.discord.ready} state={live.discord.state} />
+              </div>
+              <p>Mention Threadlight in the demo thread to request a Scripture-backed response.</p>
+              <div className="live-actions">
+                {live.discord.inviteUrl && (
+                  <a
+                    className="primary"
+                    href={live.discord.inviteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Join Discord <ExternalLink size={15} />
+                  </a>
+                )}
+                {live.discord.openUrl && (
+                  <a
+                    className="text-button"
+                    href={live.discord.openUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open demo thread <ExternalLink size={14} />
+                  </a>
+                )}
+              </div>
+              {!live.discord.inviteUrl && (
+                <small className="connection-note">Public server invite is being configured.</small>
+              )}
+              {live.discord.widgetUrl && (
+                <iframe
+                  className="discord-widget"
+                  title="Live Tapestry Discord server"
+                  src={live.discord.widgetUrl}
+                  sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+                />
+              )}
+            </article>
+            <article className="live-destination">
+              <div className="live-destination-title">
+                <span className="route-icon">
+                  <Video size={20} />
+                </span>
+                <div>
+                  <strong>{live.youtube.channelName ?? live.youtube.name}</strong>
+                  <small>{live.youtube.replyPolicy ?? "Not configured"}</small>
+                </div>
+                <LiveState ready={live.youtube.ready} state={live.youtube.state} />
+              </div>
+              <p>Comment on the selected video. Threadlight watches only the videos shown here.</p>
+              {live.youtube.selectedVideos.map((video) => (
+                <a
+                  className="live-video"
+                  href={video.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  key={video.url}
+                >
+                  {video.thumbnailUrl && <img src={video.thumbnailUrl} alt="" />}
+                  <span>
+                    <strong>{video.title}</strong>
+                    <small>Open on YouTube</small>
+                  </span>
+                  <ExternalLink size={15} />
+                </a>
+              ))}
+              <small className="connection-note">
+                {live.youtube.replyCount}/{live.youtube.dailyReplyLimit ?? 0} replies today
+                {live.youtube.lastPollAt
+                  ? ` · Last checked ${new Date(live.youtube.lastPollAt).toLocaleTimeString()}`
+                  : ""}
+              </small>
+            </article>
+          </div>
+          {errors.length > 0 && (
+            <div className="live-errors" role="status">
+              <MessageSquareWarning size={17} />
+              <div>
+                <strong>Needs attention</strong>
+                {errors.slice(0, 3).map((message) => (
+                  <p key={message}>{message}</p>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="activity-heading">
+            <div>
+              <h3>Recent activity</h3>
+              <p>Observed messages, responses, intentional skips, and connector errors.</p>
+            </div>
+            <small>Updated {new Date(live.generatedAt).toLocaleTimeString()}</small>
+          </div>
+          <div className="activity-list">
+            {live.activity.length === 0 && (
+              <p className="activity-empty">Waiting for the first live interaction.</p>
+            )}
+            {live.activity.map((event) => (
+              <article className={`activity-row ${event.status}`} key={event.id}>
+                <span className="activity-source">
+                  {event.source === "discord" ? <MessageCircle size={16} /> : <Video size={16} />}
+                </span>
+                <div>
+                  <div className="activity-meta">
+                    <strong>{activityLabel(event.status)}</strong>
+                    <span>
+                      {event.actor ? `${event.actor} · ` : ""}
+                      {new Date(event.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  {event.input && <p>{event.input}</p>}
+                  {event.output && <blockquote>{event.output}</blockquote>}
+                  {event.reason && <small className="activity-reason">{event.reason}</small>}
+                  {(event.reference || event.provider || event.durationMs !== undefined) && (
+                    <small>
+                      {[
+                        event.reference,
+                        event.provider,
+                        event.durationMs && `${event.durationMs} ms`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+          {live.youtube.recentComments.length > 0 && (
+            <details className="youtube-history">
+              <summary>Recent YouTube review history</summary>
+              {live.youtube.recentComments.map((comment) => (
+                <div
+                  className="youtube-history-row"
+                  key={`${comment.createdAt}-${comment.authorName}`}
+                >
+                  <strong>
+                    {comment.authorName} · {comment.status}
+                  </strong>
+                  <p>{comment.commentText}</p>
+                  <small>{comment.replyText}</small>
+                  {comment.error && <small className="error-copy">{comment.error}</small>}
+                </div>
+              ))}
+            </details>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function LiveState({ ready, state }: { ready: boolean; state: string }) {
+  return <span className={`live-state ${ready ? "ready" : ""}`}>{ready ? "Live" : state}</span>;
+}
+
+function activityLabel(status: PublicLiveStatus["activity"][number]["status"]) {
+  return {
+    observed: "Message observed",
+    queued: "Response queued",
+    responded: "Response sent",
+    drafted: "Reply drafted",
+    posted: "Reply posted",
+    skipped: "No response needed",
+    error: "Connector error",
+  }[status];
 }
 
 function Field({

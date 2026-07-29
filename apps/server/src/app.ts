@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { DEMO_SCENARIOS, type ThreadlightOrchestrator } from "@threadlight/core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { ActivityStore } from "./activity.js";
 import {
   type Deployment,
   DestinationCatalog,
@@ -37,6 +38,7 @@ type BuildAppOptions = {
   logger?: boolean;
   controlStore?: LocalControlStore;
   runtimeManager?: ThreadlightRuntimeManager;
+  activityStore?: ActivityStore;
   controlRuntimeFactory?: (config: LocalControlConfig) => ThreadlightOrchestrator;
   listDiscordLocations?: typeof listDiscordLocations;
   runtimeStatus?: () =>
@@ -734,6 +736,69 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     );
   }
 
+  app.get("/api/demo/live", async (_request, reply) => {
+    if (requiresRemoteControlToken(options.config) && !options.config.THREADLIGHT_DEMO_ENABLED) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+    reply.header("Cache-Control", "no-store");
+    if (!controlStore || !runtimeManager) {
+      return {
+        generatedAt: new Date().toISOString(),
+        discord: publicDiscordStatus(options.config),
+        youtube: publicYouTubeStatus(),
+        activity: [],
+      };
+    }
+
+    const [saved, runtime, activity] = await Promise.all([
+      controlStore.load(),
+      runtimeManager.status(),
+      options.activityStore?.list(50) ?? Promise.resolve([]),
+    ]);
+    const discord = saved.deployments.find((deployment) => deployment.kind === "discord");
+    const youtubeDeployment = saved.deployments.find(
+      (deployment) => deployment.kind === "youtube-comments",
+    );
+    const discordRuntime = runtime.deployments.find((entry) => entry?.id === discord?.id);
+    const youtubeRuntime = runtime.deployments.find((entry) => entry?.id === youtubeDeployment?.id);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      discord: publicDiscordStatus(options.config, discord, discordRuntime),
+      youtube: publicYouTubeStatus(youtubeDeployment, youtubeRuntime),
+      activity: activity.map(
+        ({
+          id,
+          createdAt,
+          source,
+          status,
+          actor,
+          input,
+          output,
+          reason,
+          reference,
+          provider,
+          durationMs,
+        }) => ({
+          id,
+          createdAt,
+          source,
+          status,
+          actor,
+          input,
+          output,
+          reason:
+            status === "error"
+              ? `${source === "discord" ? "Discord" : "YouTube"} connector operation failed.`
+              : reason,
+          reference,
+          provider,
+          durationMs,
+        }),
+      ),
+    };
+  });
+
   app.get("/api/demo/scenarios", async () => ({
     scenarios: DEMO_SCENARIOS,
   }));
@@ -858,6 +923,97 @@ function youtubeOAuthConfig(
 
 function youtubeCallbackUrl(config: ThreadlightConfig) {
   return `${config.THREADLIGHT_PUBLIC_URL}/api/oauth/youtube/callback`;
+}
+
+function publicDiscordStatus(
+  config: ThreadlightConfig,
+  deployment?: Deployment,
+  runtime?: {
+    state: string;
+    ready: boolean;
+    message?: string;
+    participation?: ParticipationStatus;
+  },
+) {
+  const settings = deployment?.discord;
+  const guildId = settings?.guildId;
+  const channelId = settings?.channelId;
+  return {
+    configured: Boolean(deployment && settings?.guildId && settings.channelId),
+    ready: runtime?.ready ?? false,
+    state: runtime?.state ?? deployment?.state ?? "not-configured",
+    name: deployment?.name ?? "Discord",
+    participationMode: settings?.participationMode,
+    participationLabel: settings?.participationMode
+      ? publicParticipationLabel(settings.participationMode)
+      : undefined,
+    inviteUrl: config.THREADLIGHT_DISCORD_INVITE_URL,
+    openUrl:
+      guildId && channelId ? `https://discord.com/channels/${guildId}/${channelId}` : undefined,
+    widgetUrl:
+      config.THREADLIGHT_DISCORD_WIDGET_ENABLED && guildId
+        ? `https://discord.com/widget?id=${guildId}&theme=light`
+        : undefined,
+    message: runtime?.message,
+  };
+}
+
+function publicYouTubeStatus(
+  deployment?: Deployment,
+  runtime?: { state: string; ready: boolean; message?: string },
+) {
+  const settings = deployment?.youtube;
+  return {
+    configured: Boolean(deployment && settings?.channelId && settings.selectedVideos.length),
+    ready: runtime?.ready ?? false,
+    state: runtime?.state ?? deployment?.state ?? "not-configured",
+    name: deployment?.name ?? "YouTube Comments",
+    channelName: settings?.channelName,
+    channelUrl: settings?.channelId
+      ? `https://www.youtube.com/channel/${settings.channelId}`
+      : undefined,
+    replyMode: settings?.replyMode,
+    replyPolicy: settings?.replyMode ? publicYouTubePolicy(settings.replyMode) : undefined,
+    lastPollAt: settings?.lastPollAt,
+    lastError: settings?.lastError
+      ? "YouTube encountered an error during its last operation."
+      : runtime?.message,
+    lastSafetyAlert: settings?.lastSafetyAlert,
+    replyCount: settings?.replyCount ?? 0,
+    dailyReplyLimit: settings?.dailyReplyLimit,
+    selectedVideos:
+      settings?.selectedVideos.map((video) => ({
+        title: video.title,
+        thumbnailUrl: video.thumbnailUrl,
+        url: `https://www.youtube.com/watch?v=${video.id}`,
+      })) ?? [],
+    recentComments:
+      settings?.drafts
+        .slice(-10)
+        .reverse()
+        .map((draft) => ({
+          authorName: draft.authorName,
+          commentText: draft.commentText,
+          replyText: draft.replyText,
+          status: draft.status,
+          videoTitle: draft.videoTitle,
+          createdAt: draft.createdAt,
+          resolvedAt: draft.resolvedAt,
+          error: draft.error,
+        })) ?? [],
+  };
+}
+
+function publicParticipationLabel(mode: "shy" | "medium" | "high") {
+  return { shy: "Prompted", medium: "Attentive", high: "Active" }[mode];
+}
+
+function publicYouTubePolicy(mode: "review" | "selective" | "high-touch") {
+  return {
+    review: "Review every reply",
+    selective: "Selective automatic replies",
+    "high-touch": "High-touch review queue",
+  }[mode];
 }
 
 function isProtectedControlRoute(url: string) {

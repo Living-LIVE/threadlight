@@ -15,7 +15,7 @@ YouVersion retrieval until its passage canary succeeds.
 | Submission surface | Prepared artifact | Owner action |
 | --- | --- | --- |
 | Source code | [GitHub repository](https://github.com/Living-LIVE/threadlight) | Submit this repository URL. |
-| Hosted dashboard | [Threadlight dashboard](https://threadlight.vercel.app) | Visitors can use the no-login full public workspace. It simulates the complete dashboard without accessing the operator's real configuration or publishing externally. |
+| Hosted dashboard | [Threadlight dashboard](https://threadlight.vercel.app) | Visitors can use the no-login full public workspace, open the live Discord/YouTube destinations, and observe sanitized activity without gaining operator access. |
 | Kaggle notebook | [Notebook instructions](../notebook/README.md) and `notebook/threadlight_demo.ipynb` | Publish the notebook and add its URL below. |
 | Demo video | Demo script below | Record/upload and add its public URL below. |
 | Cover image and media gallery | [Prepared gallery assets](competition-assets.md), plus a controlled Discord/YouTube walkthrough | Upload to the competition form. |
@@ -44,10 +44,10 @@ lightweight local control dashboard.
 Target length: 2 minutes 30 seconds to 3 minutes.
 
 1. Open with the problem: care, reflection, and Scripture are often disconnected from the moment people need them.
-2. Start in the no-login public workspace, run a bounded Gloo and Scripture response, and point out the attributed passage and provider trace.
-3. Open Discord and explain Prompted, Attentive, and Active presence, then show launch and pause controls.
-4. Add YouTube Comments, choose a small allowlist of videos, and show that public-demo actions stay in the browser.
-5. Show the review queue: a simulated controlled comment produces a draft, with caps and safety suppression before any public post.
+2. Start in the no-login public workspace and show the real Discord and YouTube runtime status.
+3. Join the Live Tapestry server, mention Threadlight in the demo thread, and watch the observed and responded events appear in the dashboard.
+4. Open the selected `We Paint!` video and explain the owner-selected video boundary, review policy, reply cap, and safety suppression.
+5. Run a bounded Gloo and Scripture response, then point out the attributed passage and provider trace.
 6. Close with the build story: an open-source reference implementation that works inside existing community habits.
 
 ## Pre-Submission Checklist
@@ -56,6 +56,9 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 - [x] Controlled YouTube test video selected and manual scan verified.
 - [x] One owner-approved reply canary completed on the test video.
 - [x] Gloo provider configured and demonstrated in the dashboard/runtime.
+- [ ] Hosted Discord runtime launched against the dedicated demo thread.
+- [ ] Public Discord invite added to the live dashboard.
+- [ ] Hosted public activity and protected control boundaries reverified after deployment.
 - [ ] Valid YouVersion App Key installed and one attributed Scripture retrieval verified.
 - [ ] Kaggle notebook published and its URL recorded above.
 - [ ] Demo video, cover image, and gallery uploaded.

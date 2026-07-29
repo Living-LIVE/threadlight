@@ -1,3 +1,4 @@
+import type { ActivityRecorder } from "./activity.js";
 import {
   deploymentConfigured,
   type LocalControlConfig,
@@ -23,6 +24,7 @@ type DiscordGateway = {
 type YouTubeRuntime = Pick<YouTubeConnector, "start" | "stop" | "scan" | "approve" | "reject">;
 
 type RuntimeManagerDependencies = {
+  activity?: ActivityRecorder;
   createGateway?: (
     config: DiscordGatewayConfig,
     orchestrator: ReturnType<typeof createControlRuntime>,
@@ -55,19 +57,22 @@ export class ThreadlightRuntimeManager {
   private readonly createGateway: NonNullable<RuntimeManagerDependencies["createGateway"]>;
   private readonly registerCommands: NonNullable<RuntimeManagerDependencies["registerCommands"]>;
   private readonly createYouTube: NonNullable<RuntimeManagerDependencies["createYouTube"]>;
+  private readonly activity?: ActivityRecorder;
 
   public constructor(
     private readonly store: LocalControlStore,
     dependencies: RuntimeManagerDependencies = {},
   ) {
+    this.activity = dependencies.activity;
     this.createGateway =
       dependencies.createGateway ??
-      ((config, orchestrator) => new DiscordGatewayClient(config, orchestrator));
+      ((config, orchestrator) =>
+        new DiscordGatewayClient(config, orchestrator, undefined, this.activity));
     this.registerCommands = dependencies.registerCommands ?? registerDiscordCommands;
     this.createYouTube =
       dependencies.createYouTube ??
       ((deploymentId, store, orchestrator) =>
-        new YouTubeConnector(deploymentId, store, orchestrator));
+        new YouTubeConnector(deploymentId, store, orchestrator, undefined, this.activity));
   }
 
   public async initialize(): Promise<void> {

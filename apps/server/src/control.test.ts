@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DefaultThreadlightOrchestrator } from "@threadlight/core";
 import { FixtureAIProvider, FixtureScriptureProvider } from "@threadlight/providers";
 import { afterEach, describe, expect, it } from "vitest";
+import { ActivityStore } from "./activity.js";
 import { buildApp } from "./app.js";
 import { createDefaultControlConfig, LocalControlStore, sanitizeConfig } from "./control.js";
 import { loadConfig } from "./env.js";
@@ -24,6 +25,173 @@ async function createStore() {
 }
 
 describe("local control configuration", () => {
+  it("exposes only sanitized live-demo status and activity on the public route", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "threadlight-live-demo-"));
+    cleanup.push(directory);
+    const store = new LocalControlStore(join(directory, "config.json"), () =>
+      createDefaultControlConfig({ AI_PROVIDER: "openai", OPENAI_API_KEY: "private-ai-key" }),
+    );
+    const activity = new ActivityStore(join(directory, "activity.json"));
+    const now = new Date().toISOString();
+    await store.update((config) => ({
+      ...config,
+      deployments: [
+        {
+          id: "93017a0a-f4e0-4ca7-a595-19a029253389",
+          kind: "discord",
+          name: "Live Tapestry",
+          state: "paused",
+          createdAt: now,
+          updatedAt: now,
+          discord: {
+            applicationId: "private-application-id",
+            botToken: "private-bot-token",
+            guildId: "guild-123",
+            channelId: "channel-456",
+            registerCommands: false,
+            participationMode: "shy",
+            quietSeconds: 20,
+            cooldownSeconds: 180,
+          },
+        },
+        {
+          id: "98076f77-b898-44f5-8ea8-a120d20dc176",
+          kind: "youtube-comments",
+          name: "YouTube Comments",
+          state: "paused",
+          createdAt: now,
+          updatedAt: now,
+          youtube: {
+            channelId: "youtube-channel",
+            channelName: "Threadlight",
+            clientId: "private-client-id",
+            clientSecret: "private-client-secret",
+            refreshToken: "private-refresh-token",
+            selectedVideos: [{ id: "video-123", title: "We Paint!" }],
+            replyMode: "review",
+            pollSeconds: 180,
+            dailyReplyLimit: 12,
+            lastError: "private-token diagnostic",
+            replyCount: 1,
+            processedCommentIds: [],
+            drafts: [],
+          },
+        },
+      ],
+    }));
+    await activity.record({
+      source: "discord",
+      status: "responded",
+      sourceId: "private-message-id",
+      destination: "channel-456",
+      actor: "Visitor",
+      input: "Could you share a Scripture?",
+      output: "A brief reflection.",
+      reference: "Psalm 34:18",
+    });
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+      THREADLIGHT_PUBLIC_URL: "https://threadlight.example",
+      WEB_ORIGIN: "https://threadlight.example",
+      THREADLIGHT_CONTROL_TOKEN: "control-token-that-is-at-least-32-characters",
+      THREADLIGHT_DEMO_ENABLED: "true",
+      THREADLIGHT_DISCORD_INVITE_URL: "https://discord.gg/threadlight",
+    });
+    const manager = new ThreadlightRuntimeManager(store);
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: manager,
+      activityStore: activity,
+      logger: false,
+    });
+
+    try {
+      const response = await app.inject({ method: "GET", url: "/api/demo/live" });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(response.json()).toMatchObject({
+        discord: {
+          configured: true,
+          name: "Live Tapestry",
+          participationLabel: "Prompted",
+          inviteUrl: "https://discord.gg/threadlight",
+          openUrl: "https://discord.com/channels/guild-123/channel-456",
+        },
+        youtube: {
+          configured: true,
+          channelName: "Threadlight",
+          selectedVideos: [
+            {
+              title: "We Paint!",
+              url: "https://www.youtube.com/watch?v=video-123",
+            },
+          ],
+        },
+        activity: [
+          {
+            source: "discord",
+            status: "responded",
+            actor: "Visitor",
+            reference: "Psalm 34:18",
+          },
+        ],
+      });
+      const publicBody = JSON.stringify(response.json());
+      expect(publicBody).not.toContain("private-bot-token");
+      expect(publicBody).not.toContain("private-client-secret");
+      expect(publicBody).not.toContain("private-refresh-token");
+      expect(publicBody).not.toContain("private-ai-key");
+      expect(publicBody).not.toContain("private-application-id");
+      expect(publicBody).not.toContain("private-message-id");
+      expect(publicBody).not.toContain("private-token diagnostic");
+      expect(response.json().activity[0]).not.toHaveProperty("destination");
+
+      const protectedResponse = await app.inject({ method: "GET", url: "/api/control/status" });
+      expect(protectedResponse.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("keeps the live-demo route closed when the hosted demo is disabled", async () => {
+    const store = await createStore();
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+      THREADLIGHT_PUBLIC_URL: "https://threadlight.example",
+      WEB_ORIGIN: "https://threadlight.example",
+      THREADLIGHT_CONTROL_TOKEN: "control-token-that-is-at-least-32-characters",
+      THREADLIGHT_DEMO_ENABLED: "false",
+    });
+    const app = await buildApp({
+      config,
+      orchestrator: new DefaultThreadlightOrchestrator({
+        aiProvider: new FixtureAIProvider(),
+        scriptureProvider: new FixtureScriptureProvider(),
+      }),
+      controlStore: store,
+      runtimeManager: new ThreadlightRuntimeManager(store),
+      logger: false,
+    });
+
+    try {
+      const response = await app.inject({ method: "GET", url: "/api/demo/live" });
+      expect(response.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("persists locally and never includes credentials in the browser shape", async () => {
     const store = await createStore();
     const loaded = await store.load();

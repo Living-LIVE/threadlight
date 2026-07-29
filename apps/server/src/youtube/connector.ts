@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ThreadlightOrchestrator } from "@threadlight/core";
+import type { ActivityInput, ActivityRecorder } from "../activity.js";
 import type { Deployment, LocalControlStore, YouTubeSettings } from "../control.js";
 import { YouTubeClient } from "./client.js";
 
@@ -23,6 +24,7 @@ export class YouTubeConnector {
     private readonly store: LocalControlStore,
     private readonly orchestrator: ThreadlightOrchestrator,
     private readonly client = new YouTubeClient(),
+    private readonly activity?: ActivityRecorder,
   ) {}
 
   public async start() {
@@ -89,18 +91,50 @@ export class YouTubeConnector {
     try {
       await this.client.reply(token.accessToken, draft.commentId, draft.replyText);
       await this.resolveDraft(draftId, "posted");
+      await this.record({
+        source: "youtube",
+        status: "posted",
+        sourceId: draft.commentId,
+        actor: draft.authorName,
+        input: draft.commentText,
+        output: draft.replyText,
+        destination: settings.channelName,
+        reference: draft.videoTitle ?? draft.videoId,
+      });
     } catch (error) {
       await this.resolveDraft(
         draftId,
         "failed",
         error instanceof Error ? error.message : "YouTube reply failed.",
       );
+      await this.record({
+        source: "youtube",
+        status: "error",
+        sourceId: draft.commentId,
+        reason: error instanceof Error ? error.message : "YouTube reply failed.",
+        destination: settings.channelName,
+        reference: draft.videoTitle ?? draft.videoId,
+      });
       throw error;
     }
   }
 
   public async reject(draftId: string) {
+    const deployment = await this.deployment();
+    const draft = deployment.youtube?.drafts.find((entry) => entry.id === draftId);
     await this.resolveDraft(draftId, "rejected");
+    if (draft) {
+      await this.record({
+        source: "youtube",
+        status: "skipped",
+        sourceId: draft.commentId,
+        actor: draft.authorName,
+        input: draft.commentText,
+        reason: "The operator rejected this reply draft.",
+        destination: deployment.youtube?.channelName,
+        reference: draft.videoTitle ?? draft.videoId,
+      });
+    }
   }
 
   private async process(
@@ -108,6 +142,15 @@ export class YouTubeConnector {
     deployment: Deployment,
     settings: YouTubeSettings,
   ) {
+    await this.record({
+      source: "youtube",
+      status: "observed",
+      sourceId: comment.id,
+      actor: comment.authorName,
+      input: comment.text,
+      destination: settings.channelName,
+      reference: comment.videoTitle ?? comment.videoId,
+    });
     const result = await this.orchestrator.respond({
       context: {
         channelId: `youtube:${deployment.id}:${comment.videoId}`,
@@ -130,6 +173,18 @@ export class YouTubeConnector {
     const eligibleForPublicEngagement =
       result.decision.action === "respond" && result.decision.riskLevel !== "urgent";
     if (!eligibleForPublicEngagement) {
+      await this.record({
+        source: "youtube",
+        status: "skipped",
+        sourceId: comment.id,
+        actor: comment.authorName,
+        input: comment.text,
+        reason: result.decision.reason,
+        destination: settings.channelName,
+        reference: comment.videoTitle ?? comment.videoId,
+        provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+        durationMs: result.trace.totalMs,
+      });
       await this.store.update((config) =>
         updateYoutube(config, this.deploymentId, (current) => ({
           ...current,
@@ -159,6 +214,18 @@ export class YouTubeConnector {
         required(settings.refreshToken),
       );
       await this.client.reply(token.accessToken, comment.id, result.reply.message);
+      await this.record({
+        source: "youtube",
+        status: "posted",
+        sourceId: comment.id,
+        actor: comment.authorName,
+        input: comment.text,
+        output: result.reply.message,
+        destination: settings.channelName,
+        reference: comment.videoTitle ?? comment.videoId,
+        provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+        durationMs: result.trace.totalMs,
+      });
       await this.store.update((config) =>
         updateYoutube(config, this.deploymentId, (current) => ({
           ...current,
@@ -196,6 +263,20 @@ export class YouTubeConnector {
         };
       }),
     );
+    if (result.reply) {
+      await this.record({
+        source: "youtube",
+        status: "drafted",
+        sourceId: comment.id,
+        actor: comment.authorName,
+        input: comment.text,
+        output: result.reply.message,
+        destination: settings.channelName,
+        reference: comment.videoTitle ?? comment.videoId,
+        provider: `${result.trace.aiProvider} + ${result.trace.scriptureProvider}`,
+        durationMs: result.trace.totalMs,
+      });
+    }
   }
 
   private async resolveDraft(
@@ -238,6 +319,11 @@ export class YouTubeConnector {
       this.timer = setTimeout(() => {
         void this.scan()
           .catch(async (error) => {
+            await this.record({
+              source: "youtube",
+              status: "error",
+              reason: error instanceof Error ? error.message : "YouTube polling failed.",
+            });
             await this.store.update((config) =>
               updateYoutube(config, this.deploymentId, (youtube) => ({
                 ...youtube,
@@ -259,6 +345,10 @@ export class YouTubeConnector {
       throw new Error("The YouTube deployment is unavailable.");
     }
     return deployment;
+  }
+
+  private record(input: ActivityInput): Promise<void> {
+    return this.activity?.record(input).catch(() => undefined) ?? Promise.resolve();
   }
 }
 

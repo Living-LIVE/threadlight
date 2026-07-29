@@ -66,13 +66,21 @@ runtime environment, and enter it in the dashboard when prompted. The access cod
 the browser's current memory and is never bundled into the Vercel build.
 
 When a visitor opens a protected remote dashboard without that code, Threadlight presents the full
-dashboard as a browser-isolated public demo workspace. Visitors can move through provider settings,
-Discord and YouTube setup, launch and pause controls, video selection, and draft review. Those
-changes exist only in that browser tab: they never reveal real configuration, initiate OAuth, poll
-channels, or post to Discord or YouTube. Provider preview remains deliberately bounded: configure
-`THREADLIGHT_DEMO_ENABLED=true` only when public provider usage is intended. That endpoint runs
-server-owned curated scenarios through the saved AI and Scripture provider pair and is rate-limited
-to five responses per IP per minute.
+dashboard as a public live workspace. The top of the page shows sanitized health and bounded recent
+activity from the real Discord and YouTube deployments, with links to the operator-selected demo
+thread and videos. Visitors cannot publish through the dashboard or call operator actions; they
+interact by joining Discord or commenting on an allowlisted YouTube video. The setup flow below
+remains browser-isolated and never changes the hosted deployment.
+
+Enable this surface with `THREADLIGHT_DEMO_ENABLED=true`. Persist connector activity with
+`THREADLIGHT_ACTIVITY_PATH`; Docker defaults to `/data/threadlight-activity.json`. An optional
+`THREADLIGHT_DISCORD_INVITE_URL` adds a Join Discord action. Set
+`THREADLIGHT_DISCORD_WIDGET_ENABLED=true` only after enabling the Discord server widget. The public
+API omits credentials, application IDs, OAuth data, raw message IDs, and destination IDs.
+
+Provider preview remains deliberately bounded. When the public demo is enabled, it runs
+server-owned curated scenarios through the saved AI and Scripture provider pair and is
+rate-limited.
 
 ### Local Development
 

@@ -18,6 +18,9 @@ const ConfigSchema = z.object({
   // Remote control surfaces require this token. Loopback-only installations remain passwordless.
   THREADLIGHT_CONTROL_TOKEN: z.string().trim().min(32).optional(),
   THREADLIGHT_DEMO_ENABLED: booleanFromEnv(false),
+  THREADLIGHT_ACTIVITY_PATH: z.string().min(1).default(".threadlight/activity.json"),
+  THREADLIGHT_DISCORD_INVITE_URL: z.string().url().optional(),
+  THREADLIGHT_DISCORD_WIDGET_ENABLED: booleanFromEnv(false),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   THREADLIGHT_CONFIG_PATH: z.string().min(1).default(".threadlight/config.json"),
   AI_PROVIDER: z.enum(["openai", "gemini", "gloo", "bonfire", "fixture"]).default("openai"),

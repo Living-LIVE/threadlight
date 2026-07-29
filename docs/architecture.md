@@ -44,15 +44,18 @@ Discord connection or command-registration failure leaves the HTTP service avail
 diagnosis and marks that deployment as unavailable. The process handles `SIGINT` and `SIGTERM`,
 disconnects Discord, and closes the HTTP server before exiting.
 
-Threadlight is message-stateless:
+Threadlight keeps only the bounded operational history needed by the live dashboard:
 
-- It does not persist Discord messages or demo conversations.
+- It persists up to 200 sanitized connector events with atomic writes in the local volume.
+- Events record observed, queued, responded, drafted, posted, skipped, and error outcomes.
+- The public API returns at most 50 recent events and omits raw source and destination identifiers.
 - Pending YouTube review drafts retain bounded comment and reply excerpts in the local operator
   configuration volume until the operator resolves them.
 - It fetches only recent context from the configured channel or one of its child threads.
 - Participation timers, mode overrides, queues, and deduplication state reset on restart.
 - It needs no database or queue for the Discord-first release.
-- Container replacement or laptop restart retains only operator configuration in the local volume.
+- Container replacement or laptop restart retains operator configuration and the bounded activity
+  ledger in the local volume.
 
 The liveness endpoint reports whether the process can serve requests. The readiness endpoint
 retains the legacy environment bootstrap status. `/api/control/status` reports the local route
@@ -60,7 +63,8 @@ catalog, sanitized provider state, deployment state, and runtime health. Control
 credentials write-only and never return them to the browser. When `THREADLIGHT_PUBLIC_URL` is not
 loopback, every control API and the YouTube OAuth-start endpoint require a bearer operator token;
 the OAuth callback remains state-signed for Google redirects. Remote anonymous demo requests are
-off unless explicitly enabled.
+off unless explicitly enabled. The public live route is read-only and returns only sanitized
+deployment status, operator-selected external links, and bounded activity excerpts.
 
 ### Hosted Topology
 
@@ -77,7 +81,8 @@ only in memory. It is never a `VITE_*` variable and never belongs in the static 
 
 `apps/web` is a no-login local operator surface. It guides one current decision at a time:
 choose a destination, connect it, then choose behavior and launch. After setup it becomes a
-small deployment dashboard. The existing demo APIs remain available as an integration test path.
+small deployment dashboard. In a hosted public demo, the same app leads with a read-only live
+console and keeps the configuration flow below it as a browser-only playground.
 
 ## Provider Contracts
 
@@ -92,6 +97,9 @@ translation, attribution, and source metadata.
 ## Privacy
 
 - Raw message content is not written to application logs.
+- The bounded activity volume contains short message and response excerpts for the configured demo
+  destinations. Operators must treat this volume as community data and disclose the live activity
+  view to participants.
 - Demo sessions are processed in memory and are not persisted.
 - Prompted mode processes Discord context only after an explicit invocation.
 - Attentive and Active process recent context without an explicit mention. Operators must disclose
