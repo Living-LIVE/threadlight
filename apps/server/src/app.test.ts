@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { DEMO_SCENARIOS, DefaultThreadlightOrchestrator } from "@threadlight/core";
+import {
+  DEMO_SCENARIOS,
+  DefaultThreadlightOrchestrator,
+  type ThreadlightOrchestrator,
+} from "@threadlight/core";
 import { FixtureAIProvider, FixtureScriptureProvider } from "@threadlight/providers";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
@@ -182,6 +186,40 @@ describe("Threadlight API", () => {
         scriptureProvider: "fixture-scripture",
       },
     });
+  });
+
+  it("retries one transient public provider failure", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const fixture = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    let attempts = 0;
+    const retryingOrchestrator: ThreadlightOrchestrator = {
+      async respond(input) {
+        attempts += 1;
+        if (attempts === 1) throw new Error("transient provider failure");
+        return fixture.respond(input);
+      },
+    };
+    const app = await buildApp({ config, orchestrator: retryingOrchestrator, logger: false });
+    openApps.push(app);
+    const scenario = DEMO_SCENARIOS[0];
+    if (!scenario) throw new Error("Expected a demo scenario");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/demo/respond",
+      payload: { scenarioId: scenario.id },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(attempts).toBe(2);
   });
 
   it("reuses the saved provider runtime until its configuration changes", async () => {

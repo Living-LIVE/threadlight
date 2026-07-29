@@ -667,9 +667,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       });
     }
 
-    try {
+    const respond = async () => {
       const runtime = await getPublicDemoRuntime();
-      const result = await runtime.respond({
+      return runtime.respond({
         context: {
           channelId: `demo:${scenario.id}`,
           roomName: scenario.roomName,
@@ -678,6 +678,16 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         prompt: scenario.suggestedPrompt,
         source: "demo",
         intent: scenario.id === "prayer" ? "prayer" : "reflection",
+      });
+    };
+
+    try {
+      const result = await respond().catch(async (error) => {
+        request.log.warn(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Threadlight public demo retrying after provider failure",
+        );
+        return respond();
       });
 
       return {

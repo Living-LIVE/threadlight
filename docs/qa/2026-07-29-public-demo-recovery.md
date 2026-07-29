@@ -23,15 +23,15 @@ deployment controls, and YouTube publishing operator-protected.
 
 ## Hypothesis
 
-The public route creates a new saved-provider runtime per request. For Gloo, that means a
-fresh OAuth client-credentials exchange per public reflection. The failure is therefore likely
-in Gloo authentication or completion handling, not in the public-demo or control-token boundary.
+The public route created a new saved-provider runtime per request. For Gloo, that meant a fresh
+OAuth client-credentials exchange per public reflection. The failure was therefore likely in Gloo
+authentication or completion handling, not in the public-demo or control-token boundary.
 
 ## Recovery Plan
 
-1. Run a secret-safe provider diagnostic inside the existing Railway service.
-2. Cache the saved provider runtime only while its configuration is unchanged.
-3. Add regression coverage for public scenario runtime reuse and fail-closed control access.
+1. Cache the saved provider runtime only while its configuration is unchanged.
+2. Retry one transient provider failure for a curated public scenario only.
+3. Add regression coverage for runtime reuse and the bounded retry.
 4. Deploy once, then verify public scenario, public reflection, and protected control status.
 5. Update competition documentation with the final hosted evidence.
 
@@ -42,3 +42,6 @@ in Gloo authentication or completion handling, not in the public-demo or control
   provider configuration update creates exactly one new runtime.
 - The hosted pre-deploy canary returned a live Gloo plus AO Lab reflection after the earlier
   transient `502`; the recovery deployment remains required before treating that result as final.
+- The first post-deploy request still returned a transient `502`; an immediate second request
+  returned `200` with Gloo plus AO Lab in 7.6 seconds. The bounded retry closes that cold-path
+  gap without permitting arbitrary prompts or exposing a fixture fallback.
