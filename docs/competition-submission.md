@@ -10,9 +10,9 @@ blocks inside existing conversation habits rather than introducing another desti
 The current live demo uses the verified Gloo plus AO Lab provider pair; do not claim a live
 YouVersion retrieval until its passage canary succeeds.
 
-**Handoff status:** Do not submit yet. The public product and repository are ready for review, but
-the mandatory YouVersion proof, public Kaggle notebook, public video, and final media attachments
-remain open.
+**Handoff status:** The public product and repository are deployed and ready for review. Do not
+submit yet: the mandatory YouVersion proof, public Kaggle notebook, public video, and final media
+attachments remain open.
 
 ## What Eric Submits
 
@@ -27,6 +27,8 @@ remain open.
 
 Official requirements and the current red/amber/green comparison are recorded in the
 [hackathon rules and demo audit](qa/2026-07-29-hackathon-rules-and-demo-audit.md).
+The deployed production checkpoint and verification commands are recorded in
+[Deployment and operations](deployment.md).
 
 ## Final Submission Links
 

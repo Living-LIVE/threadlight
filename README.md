@@ -29,6 +29,19 @@ reply excerpts locally until the operator resolves them.
 | Slack | Planned | Visible in the dashboard, not yet selectable. |
 | Microsoft Teams, Twitch | Coming soon | Catalog-only placeholders. |
 
+## Live Demo
+
+The complete public judging workspace is deployed at
+[threadlight-production.up.railway.app](https://threadlight-production.up.railway.app/?demo=public).
+It requires no login or access code and uses the same bundled application as the self-hosted
+runtime. Visitors can inspect sanitized Discord and YouTube health, review bounded activity and
+errors, run curated provider scenarios, and follow operator-selected links to the live community
+destinations. Publishing, OAuth, credentials, and deployment controls remain protected.
+
+The current production checkpoint and deployment verification are recorded in the
+[deployment guide](docs/deployment.md). A public demo proves only the behavior visible there; it
+does not grant anonymous visitors operator access.
+
 ## Quick Start
 
 ### Docker
@@ -81,6 +94,9 @@ API omits credentials, application IDs, OAuth data, raw message IDs, and destina
 Provider preview remains deliberately bounded. When the public demo is enabled, it runs
 server-owned curated scenarios through the saved AI and Scripture provider pair and is
 rate-limited.
+
+See the [deployment guide](docs/deployment.md) for the production topology, required environment
+variables, Railway release procedure, verification checks, and rollback guidance.
 
 ### Local Development
 
@@ -180,6 +196,7 @@ Start with the [documentation index](docs/README.md).
 
 - [Current state and roadmap](docs/current-state.md)
 - [Architecture](docs/architecture.md)
+- [Deployment and operations](docs/deployment.md)
 - [Safety model](docs/safety.md)
 - [Discord participation modes](docs/participation-modes.md)
 - [Competition readiness](docs/competition-readiness.md)

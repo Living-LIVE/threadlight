@@ -76,6 +76,23 @@ not be described as available in demos, issues, or release notes.
   and a hosted Discord mention-and-response canary appears in the public activity ledger. Vercel
   was not updated because Threadlight is not yet registered in the required Vercel target registry.
 
+## Production Checkpoint
+
+The current production release is source revision
+`09764bf6dc6b6d6527a91b9a519138545b6d6169`, deployed to Railway as
+`5f461d7f-4155-401a-99d3-ed71b7e99298` on 2026-07-29.
+
+Deployment verification established:
+
+- Railway reported `SUCCESS` with one running replica.
+- `/api/health` and the complete no-login public workspace returned `200`.
+- Discord reported enabled, ready, and running.
+- The live bundle contained the current public-demo, provider, and live-response surfaces.
+- `/api/control/status` returned `401` without operator authorization.
+
+This checkpoint proves production rollout and readiness. Feature behavior remains supported by
+separate local and hosted QA ledgers. See [Deployment and operations](deployment.md).
+
 ## Verification
 
 For a complete local quality gate:

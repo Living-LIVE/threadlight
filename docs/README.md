@@ -9,6 +9,7 @@ This directory is the technical and operational source of truth for Threadlight.
 | --- | --- |
 | [Current state](current-state.md) | What is implemented, planned, and blocked today. |
 | [Architecture](architecture.md) | System boundaries, runtime shape, and data handling. |
+| [Deployment and operations](deployment.md) | Production checkpoint, self-hosting, Railway releases, verification, and rollback. |
 | [Core user journeys](user-journeys.md) | Setup, deployment, monitoring, and public-demo behavior. |
 | [Safety model](safety.md) | Product guardrails, urgent-language behavior, and Scripture integrity. |
 | [Participation modes](participation-modes.md) | Discord behavior, timing, and operator disclosure needs. |

@@ -18,6 +18,8 @@ All notable user-visible changes are documented here. This project follows the s
   completed YouTube review history, and direct Discord and YouTube test links.
 - Credential-free Playwright coverage for setup, deployment, monitoring, and mobile dashboard
   journeys.
+- A production deployment runbook that separates pushed, deployed, healthy, and feature-verified
+  evidence and documents safe rollback boundaries.
 
 ### Changed
 
@@ -30,3 +32,5 @@ All notable user-visible changes are documented here. This project follows the s
   through the hosted demo endpoint, and keeps full YouTube video titles readable.
 - Competition documentation now maps the official rubric and required attachments to verified,
   blocked, and owner-gated Threadlight evidence.
+- The repository entrypoints now link directly to the complete no-login Railway demo and identify
+  the exact verified production source and deployment revisions.
