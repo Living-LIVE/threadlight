@@ -9,12 +9,29 @@ const controlStore = new LocalControlStore(config.THREADLIGHT_CONFIG_PATH, () =>
   createDefaultControlConfig(process.env),
 );
 const runtimeManager = new ThreadlightRuntimeManager(controlStore);
+const runtimeStatus = async () => {
+  const control = await controlStore.load();
+  const discordDeployment = control.deployments.find((deployment) => deployment.kind === "discord");
+  const runtime = await runtimeManager.status();
+  const discord = discordDeployment
+    ? runtime.deployments.find((deployment) => deployment?.id === discordDeployment.id)
+    : undefined;
+  return {
+    discord: {
+      enabled: Boolean(discordDeployment),
+      ready: discord?.ready ?? false,
+      state: discord?.state ?? (discordDeployment ? "starting" : "disabled"),
+      participation: discord?.participation,
+    },
+  };
+};
 
 const app = await buildApp({
   config,
   orchestrator: createDemoRuntime(config),
   controlStore,
   runtimeManager,
+  runtimeStatus,
 });
 
 let shuttingDown = false;

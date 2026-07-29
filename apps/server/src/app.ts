@@ -34,14 +34,23 @@ type BuildAppOptions = {
   controlStore?: LocalControlStore;
   runtimeManager?: ThreadlightRuntimeManager;
   controlRuntimeFactory?: (config: LocalControlConfig) => ThreadlightOrchestrator;
-  runtimeStatus?: () => {
-    discord: {
-      enabled: boolean;
-      ready: boolean;
-      state: string;
-      participation?: ParticipationStatus;
-    };
-  };
+  runtimeStatus?: () =>
+    | {
+        discord: {
+          enabled: boolean;
+          ready: boolean;
+          state: string;
+          participation?: ParticipationStatus;
+        };
+      }
+    | Promise<{
+        discord: {
+          enabled: boolean;
+          ready: boolean;
+          state: string;
+          participation?: ParticipationStatus;
+        };
+      }>;
 };
 
 const ProviderUpdateSchema = z.object({
@@ -164,7 +173,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   });
 
   app.get("/api/health", async () => {
-    const runtime = options.runtimeStatus?.();
+    const runtime = await options.runtimeStatus?.();
     return {
       ok: true,
       service: "threadlight",
@@ -177,7 +186,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   });
 
   app.get("/api/readiness", async (_request, reply) => {
-    const runtime = options.runtimeStatus?.();
+    const runtime = await options.runtimeStatus?.();
     const discordEnabled = runtime?.discord.enabled ?? options.config.DISCORD_ENABLED;
     const discordReady = runtime?.discord.ready ?? !options.config.DISCORD_ENABLED;
     const ready = !discordEnabled || discordReady;

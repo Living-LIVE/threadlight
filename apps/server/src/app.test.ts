@@ -119,6 +119,40 @@ describe("Threadlight API", () => {
     });
   });
 
+  it("accepts an asynchronous live runtime status", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "true",
+    });
+    const orchestrator = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    const app = await buildApp({
+      config,
+      orchestrator,
+      logger: false,
+      runtimeStatus: async () => ({
+        discord: {
+          enabled: true,
+          ready: true,
+          state: "running",
+        },
+      }),
+    });
+    openApps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/api/readiness" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ready: true,
+      development: { discord: { enabled: true, ready: true, state: "running" } },
+    });
+  });
+
   it("does not infer readiness before an enabled Discord gateway starts", async () => {
     const config = loadConfig({
       NODE_ENV: "test",
