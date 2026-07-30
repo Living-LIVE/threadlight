@@ -33,6 +33,9 @@ hosted multi-tenant service.
   deterministic provider check; real connector health and activity remain in Monitoring.
 - A provider-neutral core so channel and provider adapters can be added without coupling them to
   the dashboard.
+- Bounded Discord conversation continuity: the current turn is authoritative, up to ten preceding
+  eligible messages preserve context, reply-chain ownership scopes prayer offers, and a brief
+  affirmative response continues the immediately preceding offer without repeating it.
 - A credential-free Playwright suite for the public setup, deployment, monitoring, error-filtering,
   provider-transition, and mobile dashboard journeys.
 
@@ -80,8 +83,8 @@ not be described as available in demos, issues, or release notes.
 ## Production Checkpoint
 
 The current production release is source revision
-`481e65e6e0172a34c122d8401e378d74a21fd0d8`, deployed to Railway as
-`0ea9ea02-6ee3-49ca-9940-24b7a4a7ca79` on 2026-07-30.
+`8b5d3c8152efefbd105e683981708cbb2f2e5374`, deployed to Railway as
+`08674910-2067-4f00-9c17-7320829499ad` on 2026-07-30.
 
 Deployment verification established:
 
@@ -90,11 +93,15 @@ Deployment verification established:
 - Discord reported enabled, ready, and running.
 - The configured `#general` destination reported Active mode.
 - A plain message with no bot mention was observed, queued, and answered through Gloo plus AO Lab.
+- A two-turn parenting canary stayed on the current topic, asked permission to pray, and converted
+  the next standalone `yes please` into the promised contextual prayer.
 - `/api/control/status` returned `401` without operator authorization.
 
 This checkpoint proves production rollout and readiness. Feature behavior remains supported by
 separate local and hosted QA ledgers. See [Deployment and operations](deployment.md) and the
 [Discord Active-mode reliability ledger](qa/2026-07-30-discord-active-reliability.md).
+The exact two-turn acceptance evidence is in the
+[deployed conversation-continuation ledger](qa/2026-07-30-deployed-conversation-continuation.md).
 
 ## Verification
 

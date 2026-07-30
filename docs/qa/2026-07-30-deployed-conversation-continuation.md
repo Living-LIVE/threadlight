@@ -12,7 +12,7 @@ Feature-scoped validation of the deployed Live Tapestry `#general` workflow:
 The authenticated Discord desktop session on this machine supplied the user messages. The
 Railway-hosted Threadlight runtime supplied the responses.
 
-## Environment
+## Initial Production Failure
 
 | Field | Value |
 | --- | --- |
@@ -22,11 +22,6 @@ Railway-hosted Threadlight runtime supplied the responses.
 | Discord | Live Tapestry `#general` |
 | Participation mode | Active |
 | Provider trace | `gloo + ao-lab` |
-
-The active deployment predates the local, uncommitted conversation-history implementation. This
-run therefore distinguishes local checkout proof from deployed behavior.
-
-## Results
 
 | Acceptance criterion | Result | Evidence |
 | --- | --- | --- |
@@ -39,20 +34,58 @@ The seed response completed in `16,621 ms`. The follow-up response completed in 
 
 ![Failed deployed prayer continuation](assets/2026-07-30-conversation-continuation-failed.jpg)
 
+## Repair
+
+The repair bounds Discord history to the ten messages preceding the triggering message, preserves
+reply-chain ownership, marks the current author and current turn explicitly, removes full
+Threadlight passage embeds from model context, and gives the current topic priority over older
+participants. A brief affirmative reply is recognized only when it belongs to the recipient of
+Threadlight's immediately preceding prayer offer.
+
+The live retry exposed a second edge case: an explicit request to "ask whether I want a short
+prayer" could still produce the prayer immediately. The provider-neutral continuation policy now
+distinguishes a requested invitation from an accepted invitation. Gloo and OpenAI both retry once
+when structured output violates either contract.
+
+## Post-Repair Production Verification
+
+| Field | Value |
+| --- | --- |
+| Source revision | `8b5d3c8152efefbd105e683981708cbb2f2e5374` |
+| Railway deployment | `08674910-2067-4f00-9c17-7320829499ad` |
+| Image digest | `sha256:6d01d97653bbb4206c8ce6ac07942a88570ce5042f26a0fd246c08d6eaaada0d` |
+| Deployment status | `SUCCESS` |
+| Discord | Live Tapestry `#general` |
+| Participation mode | Active |
+| Provider trace | `gloo + ao-lab` |
+
+The deployed acceptance used this two-turn story:
+
+1. `Threadlight continuity canary 3: Parenting has stretched my patience today. Please offer a brief Scripture reflection, then ask whether I want a short prayer.`
+2. `yes please`
+
+| Acceptance criterion | Result | Evidence |
+| --- | --- | --- |
+| Latest parenting message controls the response topic | Passed | Threadlight stayed on parenting patience and selected Psalm 103:13 rather than the prior participant's topic. |
+| Threadlight asks permission before praying | Passed | The first response asked, "Would you like me to offer a short prayer for patience and grace in this moment?" |
+| Standalone `yes please` continues the offer | Passed | The next response opened "Father, You see Preston today" and delivered the promised contextual prayer without repeating the invitation. |
+| Production activity records both exchanges | Passed | Both inputs were observed, queued, and answered with `gloo + ao-lab`; no error event was emitted for the story. |
+
+The seed response completed in `13,729 ms`. The follow-up prayer completed in `17,916 ms`.
+
+![Passed deployed prayer continuation](assets/2026-07-30-conversation-continuation-passed.jpg)
+
 ## Local Supporting Checks
 
-The current checkout's focused provider and Discord tests passed: four files and 24 tests. Provider
-and server typechecks also passed. Those checks validate the uncommitted implementation locally;
-they do not prove the active Railway image contains it.
+Focused provider coverage passed 18 tests across the shared conversation policy, Gloo, and OpenAI.
+The provider and server typechecks and builds passed. Repository lint checked 113 files, and
+`git diff --check` passed before the release.
 
 ## Conclusion
 
-`FAIL - FEATURE-SCOPED` for the deployed Discord conversation-continuation story. The result
-confirms both defects addressed by the local implementation:
+`PASS - FEATURE-SCOPED` for the deployed Discord conversation-continuation story. This is direct
+hosted evidence for the two tested turns, not a claim of broad pastoral-quality coverage.
 
-- flattened history can carry a prior participant's topic into the current response;
-- Threadlight's embed-based prayer offer is absent from the next-turn context.
-
-No application code, production configuration, credentials, permissions, or deployment state was
-changed during this test. The only external mutations were the two operator-approved Discord test
-messages.
+The release replaced application code only. No production credentials, provider selections,
+permissions, OAuth configuration, or persistent-volume attachments changed. The external test
+mutations were the operator-approved Discord canary messages.
