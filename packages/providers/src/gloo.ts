@@ -11,6 +11,8 @@ import type { z } from "zod";
 import {
   detectConversationContinuation,
   fulfillsAcceptedPrayerContinuation,
+  fulfillsPrayerInvitationRequest,
+  requestsPrayerInvitation,
 } from "./conversation.js";
 
 const TOKEN_URL = "https://platform.ai.gloo.com/oauth2/token";
@@ -160,6 +162,7 @@ export class GlooProvider implements AIProvider {
   async compose(input: ComposeReplyInput) {
     return retryStructuredGlooCall(async () => {
       const continuation = detectConversationContinuation(input.context, input.prompt);
+      const prayerInvitationRequested = !continuation && requestsPrayerInvitation(input.prompt);
       const content = await this.complete(
         "Write as a restrained participant, under 90 words, with no invented Scripture, diagnoses, " +
           "or pressure. Quote Scripture only from the supplied passage. " +
@@ -167,6 +170,8 @@ export class GlooProvider implements AIProvider {
           "participant's topic unless the current prompt clearly refers back to it. " +
           "If the current prompt is a brief affirmative response to Threadlight's immediately " +
           "preceding prayer offer, write the promised short prayer now instead of offering prayer again. " +
+          "If prayerInvitationRequested is true, do not pray yet; ask the person whether they would " +
+          "like a short prayer and put that invitation in prayerPrompt. " +
           "Call the provided function with the reply.",
         {
           intent: input.intent ?? "reflection",
@@ -174,6 +179,7 @@ export class GlooProvider implements AIProvider {
           prompt: input.prompt,
           currentAuthor: input.context.currentAuthor?.name,
           continuation,
+          prayerInvitationRequested,
           decision: input.decision,
           passage: input.passage ?? null,
         },
@@ -191,6 +197,11 @@ export class GlooProvider implements AIProvider {
           "Gloo did not fulfill the accepted prayer continuation with a prayer.",
         );
         error.name = "GlooReplySchemaError:continuation";
+        throw error;
+      }
+      if (prayerInvitationRequested && !fulfillsPrayerInvitationRequest(reply)) {
+        const error = new Error("Gloo did not fulfill the requested prayer invitation.");
+        error.name = "GlooReplySchemaError:prayer-invitation";
         throw error;
       }
       return reply;

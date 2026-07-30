@@ -9,7 +9,12 @@ import type {
 import { ComposedReplySchema, DiscernmentDecisionSchema } from "@threadlight/core";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { detectConversationContinuation } from "./conversation.js";
+import {
+  detectConversationContinuation,
+  fulfillsAcceptedPrayerContinuation,
+  fulfillsPrayerInvitationRequest,
+  requestsPrayerInvitation,
+} from "./conversation.js";
 
 type OpenAIProviderOptions = {
   apiKey: string;
@@ -72,42 +77,56 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async compose(input: ComposeReplyInput) {
-    const response = await this.#client.responses.parse({
-      model: this.#model,
-      store: false,
-      max_output_tokens: 700,
-      input: [
-        {
-          role: "system",
-          content: COMPOSITION_PROMPT,
+    const continuation = detectConversationContinuation(input.context, input.prompt);
+    const prayerInvitationRequested = !continuation && requestsPrayerInvitation(input.prompt);
+    const compose = async () => {
+      const response = await this.#client.responses.parse({
+        model: this.#model,
+        store: false,
+        max_output_tokens: 700,
+        input: [
+          {
+            role: "system",
+            content: COMPOSITION_PROMPT,
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              intent: input.intent ?? "reflection",
+              trigger: input.trigger,
+              prompt: input.prompt,
+              currentAuthor: input.context.currentAuthor?.name,
+              continuation,
+              prayerInvitationRequested,
+              decision: input.decision,
+              passage: input.passage ?? null,
+              recentConversation: input.context.messages.slice(-10).map((message) => ({
+                author: message.author.name,
+                role: message.author.isAgent ? "assistant" : "user",
+                content: message.content,
+              })),
+            }),
+          },
+        ],
+        text: {
+          format: zodTextFormat(ComposedReplySchema, "threadlight_reply"),
         },
-        {
-          role: "user",
-          content: JSON.stringify({
-            intent: input.intent ?? "reflection",
-            trigger: input.trigger,
-            prompt: input.prompt,
-            currentAuthor: input.context.currentAuthor?.name,
-            continuation: detectConversationContinuation(input.context, input.prompt),
-            decision: input.decision,
-            passage: input.passage ?? null,
-            recentConversation: input.context.messages.slice(-10).map((message) => ({
-              author: message.author.name,
-              role: message.author.isAgent ? "assistant" : "user",
-              content: message.content,
-            })),
-          }),
-        },
-      ],
-      text: {
-        format: zodTextFormat(ComposedReplySchema, "threadlight_reply"),
-      },
-    });
+      });
 
-    if (!response.output_parsed) {
-      throw new Error("OpenAI returned no parsed Threadlight reply");
+      if (!response.output_parsed) {
+        throw new Error("OpenAI returned no parsed Threadlight reply");
+      }
+      return response.output_parsed;
+    };
+
+    const reply = await compose();
+    if (
+      (continuation && !fulfillsAcceptedPrayerContinuation(reply)) ||
+      (prayerInvitationRequested && !fulfillsPrayerInvitationRequest(reply))
+    ) {
+      return compose();
     }
-    return response.output_parsed;
+    return reply;
   }
 }
 
@@ -134,6 +153,7 @@ const COMPOSITION_PROMPT = [
   "Never answer an earlier participant's topic unless the current message clearly refers back to it.",
   "Use recentConversation only for continuity, and never answer a prior topic instead of the current message.",
   "If the current message is a brief affirmative response to Threadlight's immediately preceding prayer offer, write the promised short prayer now instead of offering prayer again.",
+  "If prayerInvitationRequested is true, do not pray yet; ask whether the person would like a short prayer and put that invitation in prayerPrompt.",
   "Acknowledge the person's actual words before offering Scripture.",
   "Quote Scripture only from the supplied passage and never alter its wording.",
   "Keep the main message under 90 words. Avoid clichés, diagnoses, promises, commands, and pressure.",

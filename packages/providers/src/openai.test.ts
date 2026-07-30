@@ -108,4 +108,47 @@ describe("OpenAIProvider", () => {
       },
     });
   });
+
+  it("retries when a requested invitation produces a prayer immediately", async () => {
+    const parse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        output_parsed: {
+          message: "Father, give this parent patience today. Amen.",
+          prayerPrompt: null,
+          carePrompt: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        output_parsed: {
+          message: "Parenting can stretch us thin.",
+          prayerPrompt: "Would you like me to pray for patience and wisdom?",
+          carePrompt: null,
+        },
+      });
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      client: { responses: { parse } } as unknown as OpenAI,
+    });
+
+    await expect(
+      provider.compose({
+        context: {
+          channelId: "thread-1",
+          currentAuthor: { id: "user-1", name: "Preston", isAgent: false },
+          messages: [],
+        },
+        prompt:
+          "Parenting has stretched my patience today. Please offer a brief Scripture reflection, then ask whether I want a short prayer.",
+        trigger: "every-message",
+        decision,
+      }),
+    ).resolves.toMatchObject({
+      prayerPrompt: "Would you like me to pray for patience and wisdom?",
+    });
+    expect(parse).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(parse.mock.calls[0]?.[0].input[1].content)).toMatchObject({
+      prayerInvitationRequested: true,
+    });
+  });
 });

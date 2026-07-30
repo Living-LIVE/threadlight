@@ -300,6 +300,89 @@ describe("GlooProvider", () => {
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
+  it("retries when a requested prayer invitation produces the prayer immediately", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        message: "Father, give this parent patience and wisdom today. Amen.",
+                        prayerPrompt: null,
+                        carePrompt: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        message: "Parenting can stretch us thin.",
+                        prayerPrompt: "Would you like me to pray for patience and wisdom?",
+                        carePrompt: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+
+    await expect(
+      provider.compose({
+        context: {
+          channelId: "channel-1",
+          currentAuthor: { id: "preston", name: "Preston", isAgent: false },
+          messages: [],
+        },
+        prompt:
+          "Parenting has stretched my patience today. Please offer a brief Scripture reflection, then ask whether I want a short prayer.",
+        trigger: "every-message",
+        decision: {
+          action: "respond",
+          riskLevel: "normal",
+          reason: "A brief response would help.",
+          pastoralIntent: "Offer encouragement and invite prayer.",
+          scriptureRequest: null,
+        },
+      }),
+    ).resolves.toMatchObject({
+      message: "Parenting can stretch us thin.",
+      prayerPrompt: "Would you like me to pray for patience and wisdom?",
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+
+    const [, request] = fetchFn.mock.calls[1] ?? [];
+    const body = JSON.parse(String(request?.body));
+    expect(JSON.parse(body.messages.at(-1).content)).toMatchObject({
+      prayerInvitationRequested: true,
+    });
+  });
+
   it("uses pastoral intent when Gloo omits the internal reason field", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()

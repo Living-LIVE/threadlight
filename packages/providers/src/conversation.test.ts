@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   detectConversationContinuation,
   fulfillsAcceptedPrayerContinuation,
+  fulfillsPrayerInvitationRequest,
+  requestsPrayerInvitation,
 } from "./conversation.js";
 
 function contextWithPrevious(content: string, isAgent: boolean): ConversationContext {
@@ -101,6 +103,34 @@ describe("conversation continuation", () => {
       fulfillsAcceptedPrayerContinuation({
         message: "Would you like me to offer a short prayer for patience?",
         prayerPrompt: "Yes?",
+      }),
+    ).toBe(false);
+  });
+
+  it("distinguishes a requested prayer invitation from accepting a prior offer", () => {
+    const prompt =
+      "Parenting has stretched my patience today. Please offer a brief Scripture reflection, then ask whether I want a short prayer.";
+
+    expect(requestsPrayerInvitation(prompt)).toBe(true);
+    expect(
+      detectConversationContinuation(
+        contextWithPrevious("Would you like me to pray for patience?", true),
+        prompt,
+      ),
+    ).toBeNull();
+  });
+
+  it("requires an explicit prayer invitation when the current turn requests one", () => {
+    expect(
+      fulfillsPrayerInvitationRequest({
+        message: "Parenting can stretch us thin.",
+        prayerPrompt: "Would you like me to pray for patience and wisdom?",
+      }),
+    ).toBe(true);
+    expect(
+      fulfillsPrayerInvitationRequest({
+        message: "Father, give this parent patience and wisdom today. Amen.",
+        prayerPrompt: null,
       }),
     ).toBe(false);
   });
