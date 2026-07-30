@@ -57,6 +57,8 @@ export interface DiscordGatewayLogger {
   error(message: string): void;
 }
 
+export type DiscordResponseFailurePhase = "generation" | "posting";
+
 export interface DiscordGatewayStatus {
   readonly state: "stopped" | "starting" | "ready" | "error" | "stopping";
   readonly ready: boolean;
@@ -67,6 +69,28 @@ type MessageHistoryChannel = Pick<TextBasedChannel, "messages">;
 
 function createLogger(logger?: DiscordGatewayLogger): DiscordGatewayLogger {
   return logger ?? { error: (message) => console.error(message) };
+}
+
+export function describeDiscordResponseFailure(
+  error: unknown,
+  phase: DiscordResponseFailurePhase,
+): string {
+  const name = error instanceof Error ? (error.name.split(":")[0] ?? "") : "";
+  const category =
+    name === "GlooRequestError"
+      ? "ProviderRequestError"
+      : name === "GlooEmptyResponseError"
+        ? "ProviderEmptyResponseError"
+        : /^Gloo(?:Discernment|Reply)SchemaError$/.test(name) || name === "SyntaxError"
+          ? "ProviderStructuredOutputError"
+          : name === "AbortError"
+            ? "ProviderTimeoutError"
+            : name === "TypeError"
+              ? "ProviderNetworkError"
+              : name.startsWith("DiscordAPIError")
+                ? "DiscordPostError"
+                : "ResponsePipelineError";
+  return `${phase}:${category}`;
 }
 
 function escapeRegExp(value: string): string {
@@ -384,6 +408,7 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
     prompt: string,
     trigger: ThreadlightTrigger,
   ): Promise<boolean> {
+    let phase: DiscordResponseFailurePhase = "generation";
     try {
       const guildId = message.guildId;
       if (!guildId) return false;
@@ -415,6 +440,7 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
         return false;
       }
 
+      phase = "posting";
       await message.reply({
         embeds: formatThreadlightResponse(result),
         allowedMentions: { parse: [] },
@@ -432,14 +458,15 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
         durationMs: result.trace.totalMs,
       });
       return true;
-    } catch {
-      this.logger.error("Discord message handling failed");
+    } catch (error) {
+      const failure = describeDiscordResponseFailure(error, phase);
+      this.logger.error(`Discord message handling failed (${failure})`);
       await this.record({
         source: "discord",
         status: "error",
         sourceId: message.id,
         input: prompt,
-        reason: "Threadlight could not complete or post the Discord response.",
+        reason: `Threadlight response failed (${failure}).`,
         destination: message.channelId,
       });
       return message

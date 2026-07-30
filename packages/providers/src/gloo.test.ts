@@ -214,4 +214,104 @@ describe("GlooProvider", () => {
       pastoralIntent: "a".repeat(240),
     });
   });
+
+  it("retries a malformed structured discernment response once", async () => {
+    const validDecision = {
+      action: "respond",
+      riskLevel: "normal",
+      reason: "A brief response would help.",
+      pastoralIntent: "Offer steady encouragement.",
+      scriptureRequest: null,
+    };
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { tool_calls: [{ function: { arguments: "not-json" } }] } }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [{ function: { arguments: JSON.stringify(validDecision) } }],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+
+    await expect(
+      provider.discern({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "every-message",
+      }),
+    ).resolves.toMatchObject(validDecision);
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries a transient server response but not an authentication failure", async () => {
+    const validDecision = {
+      action: "respond",
+      riskLevel: "normal",
+      reason: "A brief response would help.",
+      pastoralIntent: "Offer steady encouragement.",
+      scriptureRequest: null,
+    };
+    const transientFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(Response.json({ error: { message: "Try again." } }, { status: 503 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [{ function: { arguments: JSON.stringify(validDecision) } }],
+              },
+            },
+          ],
+        }),
+      );
+    const transientProvider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn: transientFetch,
+    });
+
+    await expect(
+      transientProvider.discern({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "every-message",
+      }),
+    ).resolves.toMatchObject(validDecision);
+    expect(transientFetch).toHaveBeenCalledTimes(3);
+
+    const authFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ error: "invalid_client" }, { status: 401 }));
+    const authProvider = new GlooProvider({
+      clientId: "bad-client",
+      clientSecret: "bad-secret",
+      fetchFn: authFetch,
+    });
+
+    await expect(
+      authProvider.discern({
+        context: { channelId: "test", messages: [] },
+        prompt: "I feel overwhelmed today.",
+        trigger: "every-message",
+      }),
+    ).rejects.toThrow("invalid_client");
+    expect(authFetch).toHaveBeenCalledTimes(1);
+  });
 });

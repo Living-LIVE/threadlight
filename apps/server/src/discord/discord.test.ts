@@ -2,6 +2,7 @@ import { PermissionFlagsBits } from "discord.js";
 import { describe, expect, it } from "vitest";
 import {
   ASK_THREADLIGHT_CONTEXT_NAME,
+  describeDiscordResponseFailure,
   discordCommands,
   extractMentionPrompt,
   formatThreadlightResponse,
@@ -14,6 +15,30 @@ import {
 } from "./index.js";
 
 describe("Discord adapter", () => {
+  it("records a sanitized response failure phase and category", () => {
+    const schemaError = new Error("provider output included invalid content");
+    schemaError.name = "GlooDiscernmentSchemaError:scriptureRequest.bookId";
+
+    expect(describeDiscordResponseFailure(schemaError, "generation")).toBe(
+      "generation:ProviderStructuredOutputError",
+    );
+    expect(
+      describeDiscordResponseFailure(
+        Object.assign(new Error("temporary provider failure"), { name: "GlooRequestError" }),
+        "generation",
+      ),
+    ).toBe("generation:ProviderRequestError");
+    expect(
+      describeDiscordResponseFailure(
+        Object.assign(new Error("request rejected"), { name: "DiscordAPIError[50035]" }),
+        "posting",
+      ),
+    ).toBe("posting:DiscordPostError");
+    expect(describeDiscordResponseFailure("unknown", "generation")).toBe(
+      "generation:ResponsePipelineError",
+    );
+  });
+
   it("registers the three slash commands and message action", () => {
     expect(discordCommands).toHaveLength(4);
     expect(discordCommands.map((command) => command.name)).toEqual([

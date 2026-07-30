@@ -16,10 +16,12 @@ export type {
   DiscordGatewayConfig,
   DiscordGatewayLogger,
   DiscordGatewayStatus,
+  DiscordResponseFailurePhase,
 } from "./gateway.js";
 export {
   createDiscordGateway,
   DiscordGatewayClient,
+  describeDiscordResponseFailure,
   extractMentionPrompt,
   fetchRecentContext,
   isAllowedDiscordLocation,
