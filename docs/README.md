@@ -19,6 +19,7 @@ This directory is the technical and operational source of truth for Threadlight.
 | [Competition gallery assets](competition-assets.md) | Clean desktop and mobile dashboard captures for the submission gallery. |
 | [Hackathon rules and demo audit](qa/2026-07-29-hackathon-rules-and-demo-audit.md) | Official criteria, deployed screenshots, rubric comparison, local fixes, and remaining submission gates. |
 | [Current local full-suite run](qa/2026-07-29-full-suite-local.md) | Canonical checks, browser journeys, credentialed canaries, host-safety pause, and exact resume steps. |
+| [Discord Active-mode reliability](qa/2026-07-30-discord-active-reliability.md) | Transient provider hardening, exact production release, and a live no-mention `#general` canary. |
 | [Current Docker smoke QA](qa/2026-07-26-docker-smoke.md) | Exact-source self-hosted image/runtime verification status. |
 | [Local Discord recovery finish line](qa/2026-07-29-local-discord-recovery-finish-line.md) | Local Discord runtime recovery, browser proof, and regression coverage. |
 | [QA ledger](qa/2026-07-25-local-control-surface-build.md) | Historical local control-surface build evidence. |

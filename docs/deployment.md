@@ -12,17 +12,22 @@ complete container to a host that supports persistent processes and durable stor
 | Service | `threadlight` |
 | Environment | `production` |
 | Source branch | `codex/build-threadlight` |
-| Source revision | `09764bf6dc6b6d6527a91b9a519138545b6d6169` |
-| Railway deployment | `5f461d7f-4155-401a-99d3-ed71b7e99298` |
-| Verified | 2026-07-29 |
+| Source revision | `481e65e6e0172a34c122d8401e378d74a21fd0d8` |
+| Railway deployment | `0ea9ea02-6ee3-49ca-9940-24b7a4a7ca79` |
+| Image digest | `sha256:b1ca703ce684432ee7b68389656a6231527a15052c3af12d592c0be88486f20b` |
+| Verified | 2026-07-30 |
 
 That deployment reached Railway `SUCCESS` with one running replica. The public workspace and
 health endpoint returned `200`, the Discord runtime reported enabled, ready, and running, and the
-operator control endpoint returned `401` without authorization. The deployed JavaScript bundle
-contained the current public-demo, provider, and live-response surfaces.
+operator control endpoint returned `401` without authorization. The live deployment used the
+repository `railway.json` to select the root Dockerfile. A plain, unmentioned message in the
+configured `#general` channel produced an automatic Active-mode response through the saved Gloo
+and AO Lab providers.
 
 This is deployment evidence, not a substitute for feature QA. The current local feature evidence
-is recorded in the [full-suite QA ledger](qa/2026-07-29-full-suite-local.md).
+is recorded in the [full-suite QA ledger](qa/2026-07-29-full-suite-local.md), and the exact
+production Discord canary is recorded in the
+[Active-mode reliability ledger](qa/2026-07-30-discord-active-reliability.md).
 
 ## Runtime Topology
 

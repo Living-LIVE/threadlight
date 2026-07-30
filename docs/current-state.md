@@ -73,25 +73,28 @@ not be described as available in demos, issues, or release notes.
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 - Railway production serves the complete bundled public app at
   `https://threadlight-production.up.railway.app/?demo=public`. Discord and YouTube are both ready,
-  and a hosted Discord mention-and-response canary appears in the public activity ledger. Vercel
-  was not updated because Threadlight is not yet registered in the required Vercel target registry.
+  and a hosted Discord no-mention Active-mode canary from `#general` appears in the public activity
+  ledger. Vercel was not updated because Threadlight is not yet registered in the required Vercel
+  target registry.
 
 ## Production Checkpoint
 
 The current production release is source revision
-`09764bf6dc6b6d6527a91b9a519138545b6d6169`, deployed to Railway as
-`5f461d7f-4155-401a-99d3-ed71b7e99298` on 2026-07-29.
+`481e65e6e0172a34c122d8401e378d74a21fd0d8`, deployed to Railway as
+`0ea9ea02-6ee3-49ca-9940-24b7a4a7ca79` on 2026-07-30.
 
 Deployment verification established:
 
 - Railway reported `SUCCESS` with one running replica.
 - `/api/health` and the complete no-login public workspace returned `200`.
 - Discord reported enabled, ready, and running.
-- The live bundle contained the current public-demo, provider, and live-response surfaces.
+- The configured `#general` destination reported Active mode.
+- A plain message with no bot mention was observed, queued, and answered through Gloo plus AO Lab.
 - `/api/control/status` returned `401` without operator authorization.
 
 This checkpoint proves production rollout and readiness. Feature behavior remains supported by
-separate local and hosted QA ledgers. See [Deployment and operations](deployment.md).
+separate local and hosted QA ledgers. See [Deployment and operations](deployment.md) and the
+[Discord Active-mode reliability ledger](qa/2026-07-30-discord-active-reliability.md).
 
 ## Verification
 
