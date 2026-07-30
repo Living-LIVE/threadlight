@@ -51,7 +51,15 @@ Threadlight keeps only the bounded operational history needed by the live dashbo
 - The public API returns at most 50 recent events and omits raw source and destination identifiers.
 - Pending YouTube review drafts retain bounded comment and reply excerpts in the local operator
   configuration volume until the operator resolves them.
-- It fetches only recent context from the configured channel or one of its child threads.
+- It snapshots at most the latest 10 eligible text turns before the triggering Discord message
+  from the configured channel or one of its child threads. Later queued messages cannot leak into
+  an earlier response.
+- Threadlight embed descriptions, prayer offers, gentle next steps, and passage references are
+  normalized into assistant turns. Full passage text, translation, attribution, unrelated bot
+  messages, and non-text messages are omitted from conversational context.
+- Discord reply references preserve which participant received a Threadlight offer. A brief
+  affirmative follow-up continues a prayer offer only when that offer belongs to the current
+  participant or the participant directly replies to it.
 - Participation timers, mode overrides, queues, and deduplication state reset on restart.
 - It needs no database or queue for the Discord-first release.
 - Container replacement or laptop restart retains operator configuration and the bounded activity
@@ -94,6 +102,11 @@ The AI provider returns two structured outputs:
 The Scripture provider receives a normalized USFM book/chapter/verse request and returns text,
 translation, attribution, and source metadata.
 
+Gloo Completions V2 receives the bounded context as standard `user` and `assistant` messages.
+Threadlight owns that ephemeral conversation window rather than relying on a provider-side chat
+session or persistent conversation identifier. The current author and any resolved continuation
+are supplied separately from prior turns, and the current prompt remains authoritative.
+
 ## Privacy
 
 - Raw message content is not written to application logs.
@@ -104,6 +117,8 @@ translation, attribution, and source metadata.
 - Prompted mode processes Discord context only after an explicit invocation.
 - Attentive and Active process recent context without an explicit mention. Operators must disclose
   this behavior to participants in the configured channel.
+- Deterministic urgent-language assessment evaluates the current triggering message, not unrelated
+  historical messages from other participants.
 - Provider keys remain server-side.
 
 ## Operator Boundary

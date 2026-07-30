@@ -125,6 +125,181 @@ describe("GlooProvider", () => {
     });
   });
 
+  it("sends the latest ten turns as role-correct conversation history", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        message: "God, give this parent patience and grace today. Amen.",
+                        prayerPrompt: null,
+                        carePrompt: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+    const messages = Array.from({ length: 12 }, (_, index) => ({
+      id: `message-${index}`,
+      author: {
+        id: index === 11 ? "threadlight" : `person-${index}`,
+        name: index === 11 ? "Threadlight" : `Person ${index}`,
+        isAgent: index === 11,
+      },
+      content:
+        index === 11
+          ? "Prayer: Would you like me to offer a short prayer for patience?"
+          : `Channel message ${index}`,
+      createdAt: new Date(index * 1_000).toISOString(),
+      ...(index === 11 ? { replyToAuthorId: "preston" } : {}),
+    }));
+
+    await provider.compose({
+      context: {
+        channelId: "channel-1",
+        currentAuthor: { id: "preston", name: "Preston", isAgent: false },
+        messages,
+      },
+      prompt: "yes please",
+      trigger: "every-message",
+      decision: {
+        action: "respond",
+        riskLevel: "normal",
+        reason: "The user accepted the immediately preceding prayer offer.",
+        pastoralIntent: "Continue with the promised prayer.",
+        scriptureRequest: null,
+      },
+    });
+
+    const [, request] = fetchFn.mock.calls[1] ?? [];
+    const body = JSON.parse(String(request?.body));
+    expect(body.messages).toHaveLength(12);
+    expect(body.messages[1]).toEqual({
+      role: "user",
+      content: "Person 2: Channel message 2",
+    });
+    expect(body.messages.at(-2)).toEqual({
+      role: "assistant",
+      content: "Prayer: Would you like me to offer a short prayer for patience?",
+    });
+    expect(body.messages[0].content).toContain("write the promised short prayer now");
+    expect(JSON.parse(body.messages.at(-1).content)).toMatchObject({
+      prompt: "yes please",
+      currentAuthor: "Preston",
+      continuation: {
+        type: "accepted_prayer_offer",
+        offeredBy: "Threadlight",
+      },
+      trigger: "every-message",
+    });
+  });
+
+  it("retries when an accepted prayer offer produces another invitation", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ access_token: "test-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        message: "Would you like me to offer a short prayer for patience?",
+                        prayerPrompt: "Would you like me to pray?",
+                        carePrompt: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({
+                        message: "God, give this parent patience and grace today. Amen.",
+                        prayerPrompt: null,
+                        carePrompt: null,
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    const provider = new GlooProvider({
+      clientId: "test-client",
+      clientSecret: "test-secret",
+      fetchFn,
+    });
+
+    await expect(
+      provider.compose({
+        context: {
+          channelId: "channel-1",
+          currentAuthor: { id: "preston", name: "Preston", isAgent: false },
+          messages: [
+            {
+              id: "request",
+              author: { id: "preston", name: "Preston", isAgent: false },
+              content: "I could use patience with parenting today.",
+              createdAt: "2026-07-30T21:00:00.000Z",
+            },
+            {
+              id: "offer",
+              author: { id: "threadlight", name: "Threadlight", isAgent: true },
+              content: "Prayer: Would you like me to offer a short prayer for patience?",
+              createdAt: "2026-07-30T21:00:10.000Z",
+              replyToMessageId: "request",
+            },
+          ],
+        },
+        prompt: "yes please",
+        trigger: "every-message",
+        decision: {
+          action: "respond",
+          riskLevel: "normal",
+          reason: "The user accepted the prayer offer.",
+          pastoralIntent: "Continue with the promised prayer.",
+          scriptureRequest: null,
+        },
+      }),
+    ).resolves.toMatchObject({
+      message: "God, give this parent patience and grace today. Amen.",
+      prayerPrompt: null,
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
   it("uses pastoral intent when Gloo omits the internal reason field", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()

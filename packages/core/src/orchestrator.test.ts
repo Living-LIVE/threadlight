@@ -145,4 +145,28 @@ describe("DefaultThreadlightOrchestrator", () => {
       status: "skipped",
     });
   });
+
+  it("does not apply another participant's historical urgent language to the current message", async () => {
+    const orchestrator = new DefaultThreadlightOrchestrator(providers());
+    const result = await orchestrator.respond({
+      ...baseRequest,
+      context: {
+        ...baseRequest.context,
+        currentAuthor: { id: "person-2", name: "Taylor", isAgent: false },
+        messages: [
+          {
+            id: "urgent-history",
+            author: { id: "person-1", name: "Jordan", isAgent: false },
+            content: "I am going to kill myself tonight.",
+            createdAt: "2026-07-24T15:00:00.000Z",
+          },
+        ],
+      },
+      prompt: "I could use patience with parenting today.",
+    });
+
+    expect(result.decision.action).toBe("respond");
+    expect(result.decision.riskLevel).toBe("normal");
+    expect(result.reply?.message).toContain("weight");
+  });
 });

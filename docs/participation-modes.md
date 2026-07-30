@@ -56,4 +56,8 @@ argument it reports the effective mode. A mode argument changes the in-memory mo
 Active mode also requires `confirm_high: True`.
 
 Attentive and Active send recent conversation context to the configured AI provider without an
-explicit mention. Operators should place a visible notice in every enabled channel and thread.
+explicit mention. The context is bounded to the latest 10 eligible text turns. Threadlight's own
+embed replies are included so brief follow-ups such as accepting an offered prayer retain their
+meaning. Context is captured before the triggering message enters the response queue, and prayer
+acceptance is limited to the participant who received the offer or directly replied to it.
+Operators should place a visible notice in every enabled channel and thread.

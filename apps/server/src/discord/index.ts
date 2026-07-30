@@ -22,6 +22,7 @@ export {
   createDiscordGateway,
   DiscordGatewayClient,
   describeDiscordResponseFailure,
+  extractDiscordContextText,
   extractMentionPrompt,
   fetchRecentContext,
   isAllowedDiscordLocation,

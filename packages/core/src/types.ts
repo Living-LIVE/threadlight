@@ -12,12 +12,16 @@ export type ConversationMessage = {
   author: ConversationAuthor;
   content: string;
   createdAt: string;
+  replyToMessageId?: string;
+  replyToAuthorId?: string;
 };
 
 export type ConversationContext = {
   channelId: string;
   guildId?: string;
   roomName?: string;
+  currentAuthor?: ConversationAuthor;
+  currentReplyToMessageId?: string;
   messages: ConversationMessage[];
 };
 

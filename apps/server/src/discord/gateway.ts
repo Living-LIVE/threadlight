@@ -8,6 +8,7 @@ import { assessImmediateSafety } from "@threadlight/core";
 import {
   type ChatInputCommandInteraction,
   Client,
+  type Embed,
   Events,
   GatewayIntentBits,
   type Interaction,
@@ -32,11 +33,12 @@ import {
 import { formatThreadlightResponse } from "./response.js";
 
 const DEFAULT_COOLDOWN_MS = 15_000;
-const DEFAULT_RECENT_CONTEXT_LIMIT = 8;
+const DEFAULT_RECENT_CONTEXT_LIMIT = 10;
 const DEFAULT_AMBIENT_QUIET_MS = 20_000;
 const DEFAULT_AMBIENT_COOLDOWN_MS = 180_000;
 const DEFAULT_MAX_QUEUE_DEPTH = 25;
 const MAX_EXPLICIT_COOLDOWNS = 1_000;
+const MAX_CONTEXT_TEXT_LENGTH = 2_000;
 const GENERIC_ERROR_MESSAGE = "Threadlight could not respond right now. Please try again.";
 const COOLDOWN_MESSAGE = "Please give Threadlight a moment before asking again.";
 const QUEUE_FULL_MESSAGE = "Threadlight is catching up. Please give it a moment.";
@@ -105,37 +107,98 @@ export function extractMentionPrompt(content: string, botUserId: string): string
   return prompt || undefined;
 }
 
-function toConversationMessage(message: Message): ConversationMessage {
+type DiscordContextEmbed = Pick<Embed, "description" | "fields">;
+
+export function extractDiscordContextText(
+  content: string,
+  embeds: readonly DiscordContextEmbed[],
+): string {
+  const parts = [content.trim()];
+  for (const embed of embeds) {
+    if (embed.description?.trim()) parts.push(embed.description.trim());
+    const fields = [...embed.fields].sort(
+      (left, right) => contextFieldPriority(left.name) - contextFieldPriority(right.name),
+    );
+    for (const field of fields) {
+      const name = field.name.trim();
+      const value = field.value.trim();
+      const contextValue = contextFieldText(name, value);
+      if (contextValue) parts.push(contextValue);
+    }
+  }
+  return parts.filter(Boolean).join("\n\n").slice(0, MAX_CONTEXT_TEXT_LENGTH).trimEnd();
+}
+
+function contextFieldPriority(name: string): number {
+  const normalized = name.trim().toLowerCase();
+  if (normalized === "prayer") return 0;
+  if (normalized === "a gentle next step") return 1;
+  if (normalized === "passage") return 2;
+  return 3;
+}
+
+function contextFieldText(name: string, value: string): string | undefined {
+  if (!name || !value) return undefined;
+  const normalized = name.toLowerCase();
+  if (normalized === "prayer" || normalized === "a gentle next step") {
+    return `${name}: ${value}`;
+  }
+  if (normalized === "passage") {
+    const reference = value.split(/\n/)[0]?.trim();
+    return reference ? `${name}: ${reference}` : undefined;
+  }
+  return undefined;
+}
+
+function toConversationMessage(message: Message, agentUserId?: string): ConversationMessage {
   return {
     id: message.id,
     author: {
       id: message.author.id,
       name: message.author.username,
       avatarUrl: message.author.displayAvatarURL(),
-      isAgent: message.author.bot,
+      isAgent: message.author.id === agentUserId,
     },
-    content: message.content,
+    content: extractDiscordContextText(message.content, message.embeds),
     createdAt: message.createdAt.toISOString(),
+    ...(message.reference?.messageId ? { replyToMessageId: message.reference.messageId } : {}),
+    ...(message.mentions.repliedUser?.id
+      ? { replyToAuthorId: message.mentions.repliedUser.id }
+      : {}),
   };
 }
 
 export async function fetchRecentContext(
   channel: MessageHistoryChannel,
   limit = DEFAULT_RECENT_CONTEXT_LIMIT,
+  agentUserId?: string,
+  beforeMessageId?: string,
 ): Promise<ConversationMessage[]> {
-  const messages = await channel.messages.fetch({ limit });
-  return [...messages.values()].reverse().map(toConversationMessage);
+  const messages = await channel.messages.fetch({
+    limit: Math.min(limit * 3, 100),
+    ...(beforeMessageId ? { before: beforeMessageId } : {}),
+  });
+  return [...messages.values()]
+    .reverse()
+    .filter((message) => !message.author.bot || message.author.id === agentUserId)
+    .map((message) => toConversationMessage(message, agentUserId))
+    .filter((message) => message.content.length > 0)
+    .slice(-limit);
 }
 
 function createConversationContext(
   channelId: string,
   guildId: string,
   messages: ConversationMessage[],
+  currentAuthor?: ConversationMessage["author"],
+  currentReplyToMessageId?: string,
 ): ConversationContext {
   return {
     channelId,
     guildId,
     messages,
+    ...(currentAuthor ? { currentAuthor } : {}),
+    ...(currentReplyToMessageId ? { currentReplyToMessageId } : {}),
   };
 }
 
@@ -411,15 +474,25 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
     let phase: DiscordResponseFailurePhase = "generation";
     try {
       const guildId = message.guildId;
-      if (!guildId) return false;
+      const agentUserId = this.client.user?.id;
+      if (!guildId || !agentUserId) return false;
       const contextMessages = await fetchRecentContext(
         message.channel as MessageHistoryChannel,
         this.config.recentContextLimit,
+        agentUserId,
+        message.id,
       );
       const context = createConversationContext(
         message.channelId,
         guildId,
-        contextMessages.filter((item) => item.id !== message.id),
+        contextMessages,
+        {
+          id: message.author.id,
+          name: message.member?.displayName ?? message.author.username,
+          avatarUrl: message.author.displayAvatarURL(),
+          isAgent: false,
+        },
+        message.reference?.messageId,
       );
       const result = await this.orchestrator.respond({
         context,
@@ -543,13 +616,23 @@ export class DiscordGatewayClient implements DiscordGatewayStatus {
       const channel = getChannel(interaction);
       if (!channel) throw new Error("Discord interaction channel is unavailable");
 
-      const contextMessages = await fetchRecentContext(channel, this.config.recentContextLimit);
+      const contextMessages = await fetchRecentContext(
+        channel,
+        this.config.recentContextLimit,
+        this.client.user?.id,
+      );
       const context = createConversationContext(
         interaction.channelId,
         interaction.guildId,
         request.targetMessageId
           ? contextMessages.filter((item) => item.id !== request.targetMessageId)
           : contextMessages,
+        {
+          id: interaction.user.id,
+          name: interaction.user.username,
+          avatarUrl: interaction.user.displayAvatarURL(),
+          isAgent: false,
+        },
       );
       const result = await this.orchestrator.respond({
         context,

@@ -1,10 +1,12 @@
-import { PermissionFlagsBits } from "discord.js";
-import { describe, expect, it } from "vitest";
+import { Collection, PermissionFlagsBits } from "discord.js";
+import { describe, expect, it, vi } from "vitest";
 import {
   ASK_THREADLIGHT_CONTEXT_NAME,
   describeDiscordResponseFailure,
   discordCommands,
+  extractDiscordContextText,
   extractMentionPrompt,
+  fetchRecentContext,
   formatThreadlightResponse,
   getDiscordInstallUrl,
   isAllowedDiscordLocation,
@@ -77,6 +79,60 @@ describe("Discord adapter", () => {
     expect(extractMentionPrompt("<@123> help me reflect", "123")).toBe("help me reflect");
     expect(extractMentionPrompt("<@!123>   pray with us", "123")).toBe("pray with us");
     expect(extractMentionPrompt("help me reflect", "123")).toBeUndefined();
+  });
+
+  it("preserves Threadlight embed text for conversational follow-ups", () => {
+    expect(
+      extractDiscordContextText("", [
+        {
+          description: "Parenting stretches us all.",
+          fields: [
+            {
+              name: "Prayer",
+              value: "Would you like me to offer a short prayer for patience?",
+              inline: false,
+            },
+          ],
+        },
+      ]),
+    ).toBe(
+      "Parenting stretches us all.\n\nPrayer: Would you like me to offer a short prayer for patience?",
+    );
+  });
+
+  it("prioritizes prayer offers inside the bounded context text", () => {
+    const content = extractDiscordContextText("", [
+      {
+        description: "A brief reflection.",
+        fields: [
+          { name: "Passage", value: `Psalm 103:8\n\n${"x".repeat(3_000)}`, inline: false },
+          { name: "Translation", value: "BSB", inline: true },
+          {
+            name: "Prayer",
+            value: "Would you like me to offer a short prayer?",
+            inline: false,
+          },
+        ],
+      },
+    ]);
+
+    expect(content).toContain("Prayer: Would you like me to offer a short prayer?");
+    expect(content.length).toBeLessThanOrEqual(2_000);
+    expect(content.indexOf("Prayer:")).toBeLessThan(content.indexOf("Passage:"));
+    expect(content).toContain("Passage: Psalm 103:8");
+    expect(content).not.toContain("Translation");
+    expect(content).not.toContain("xxx");
+  });
+
+  it("fetches a bounded context snapshot before the triggering message", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Collection());
+    const channel = {
+      messages: { fetch },
+    } as unknown as Parameters<typeof fetchRecentContext>[0];
+
+    await fetchRecentContext(channel, 10, "threadlight", "current-message");
+
+    expect(fetch).toHaveBeenCalledWith({ limit: 30, before: "current-message" });
   });
 
   it("renders a grounded reply without enabling mentions", () => {

@@ -37,13 +37,8 @@ export class DefaultThreadlightOrchestrator implements ThreadlightOrchestrator {
     const startedAt = this.#now();
     const steps: TraceStep[] = [];
     const trigger = request.trigger ?? "explicit";
-    const combinedText = [
-      ...request.context.messages.slice(-20).map((message) => message.content),
-      request.prompt,
-    ].join("\n");
-
     const safetyStarted = this.#now();
-    const assessment = assessImmediateSafety(combinedText);
+    const assessment = assessImmediateSafety(request.prompt);
     steps.push(step("safety precheck", safetyStarted, this.#now(), "completed"));
 
     if (assessment.riskLevel === "urgent") {
