@@ -34,6 +34,37 @@ function fixtureApp() {
 }
 
 describe("Threadlight API", () => {
+  it("reports saved providers as the active health provider pair", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const store = new LocalControlStore(`.threadlight/health-${randomUUID()}.json`, () =>
+      createDefaultControlConfig({
+        AI_PROVIDER: "gloo",
+        GLOO_CLIENT_ID: "client-id",
+        GLOO_CLIENT_SECRET: "client-secret",
+        GLOO_MODEL: "auto",
+        SCRIPTURE_PROVIDER: "youversion",
+        YVP_APP_KEY: "app-key",
+        YVP_BIBLE_ID: "3034",
+      }),
+    );
+    const orchestrator = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    const app = await buildApp({ config, orchestrator, controlStore: store, logger: false });
+    openApps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/api/health" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().providers).toEqual({ ai: "gloo", scripture: "youversion" });
+  });
+
   it("reports active and competition provider readiness separately", async () => {
     const app = await fixtureApp();
     const response = await app.inject({ method: "GET", url: "/api/readiness" });
@@ -254,6 +285,88 @@ describe("Threadlight API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(attempts).toBe(2);
+  });
+
+  it("retries the judged scenario when the first response omits Scripture", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const fixture = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    const prompts: string[] = [];
+    const retryingOrchestrator: ThreadlightOrchestrator = {
+      async respond(input) {
+        prompts.push(input.prompt);
+        const result = await fixture.respond(input);
+        if (prompts.length > 1) return result;
+        return {
+          ...result,
+          reply: result.reply ? { ...result.reply, passage: undefined } : undefined,
+        };
+      },
+    };
+    const app = await buildApp({ config, orchestrator: retryingOrchestrator, logger: false });
+    openApps.push(app);
+    const scenario = DEMO_SCENARIOS[0];
+    if (!scenario) throw new Error("Expected a demo scenario");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/demo/respond",
+      payload: { scenarioId: scenario.id },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain("attributed Scripture passage");
+    expect(response.json().reply.passage.reference).toBe("Psalm 34:18");
+  });
+
+  it("fails closed when the judged scenario cannot return Scripture", async () => {
+    const config = loadConfig({
+      NODE_ENV: "test",
+      AI_PROVIDER: "fixture",
+      SCRIPTURE_PROVIDER: "fixture",
+      DISCORD_ENABLED: "false",
+    });
+    const fixture = new DefaultThreadlightOrchestrator({
+      aiProvider: new FixtureAIProvider(),
+      scriptureProvider: new FixtureScriptureProvider(),
+    });
+    const missingScriptureOrchestrator: ThreadlightOrchestrator = {
+      async respond(input) {
+        const result = await fixture.respond(input);
+        return {
+          ...result,
+          reply: result.reply ? { ...result.reply, passage: undefined } : undefined,
+        };
+      },
+    };
+    const app = await buildApp({
+      config,
+      orchestrator: missingScriptureOrchestrator,
+      logger: false,
+    });
+    openApps.push(app);
+    const scenario = DEMO_SCENARIOS[0];
+    if (!scenario) throw new Error("Expected a demo scenario");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/demo/respond",
+      payload: { scenarioId: scenario.id },
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({
+      error: "provider_unavailable",
+      message: "Threadlight could not form a response right now.",
+    });
   });
 
   it("reuses the saved provider runtime until its configuration changes", async () => {

@@ -6,6 +6,7 @@ export type DemoScenario = {
   summary: string;
   roomName: string;
   suggestedPrompt: string;
+  requiresScripture?: boolean;
   messages: ConversationMessage[];
 };
 
@@ -21,7 +22,9 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     label: "Grief",
     summary: "A quiet admission after everyone else has moved on.",
     roomName: "Live Tapestry",
-    suggestedPrompt: "I keep telling everyone I am okay, but the house feels impossibly empty.",
+    suggestedPrompt:
+      "I keep telling everyone I am okay, but the house feels impossibly empty. Is there a Scripture that can meet me here?",
+    requiresScripture: true,
     messages: [
       {
         id: "grief-1",
@@ -38,7 +41,8 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       {
         id: "grief-3",
         author: { id: "jordan", name: "Jordan" },
-        content: "I keep telling everyone I am okay, but the house feels impossibly empty.",
+        content:
+          "I keep telling everyone I am okay, but the house feels impossibly empty. Is there a Scripture that can meet me here?",
         createdAt: at(2),
       },
     ],

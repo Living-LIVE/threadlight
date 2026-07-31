@@ -211,12 +211,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.get("/api/health", async () => {
     const runtime = await options.runtimeStatus?.();
+    const savedProviders = options.controlStore
+      ? (await options.controlStore.load()).providers
+      : undefined;
     return {
       ok: true,
       service: "threadlight",
       providers: {
-        ai: options.config.AI_PROVIDER,
-        scripture: options.config.SCRIPTURE_PROVIDER,
+        ai: savedProviders?.ai.provider ?? options.config.AI_PROVIDER,
+        scripture: savedProviders?.scripture.provider ?? options.config.SCRIPTURE_PROVIDER,
       },
       ...(runtime ? { runtime } : {}),
     };
@@ -818,7 +821,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       });
     }
 
-    const respond = async () => {
+    const respond = async (prompt = scenario.suggestedPrompt) => {
       const runtime = await getPublicDemoRuntime();
       return runtime.respond({
         context: {
@@ -826,20 +829,34 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           roomName: scenario.roomName,
           messages: scenario.messages,
         },
-        prompt: scenario.suggestedPrompt,
+        prompt,
         source: "demo",
         intent: scenario.id === "prayer" ? "prayer" : "reflection",
       });
     };
 
     try {
-      const result = await respond().catch(async (error) => {
+      let result = await respond().catch(async (error) => {
         request.log.warn(
           { errorName: error instanceof Error ? error.name : "UnknownError" },
           "Threadlight public demo retrying after provider failure",
         );
         return respond();
       });
+
+      if (scenario.requiresScripture && !result.reply?.passage) {
+        request.log.warn(
+          { scenarioId: scenario.id },
+          "Threadlight public demo retrying to complete required Scripture evidence",
+        );
+        result = await respond(
+          `${scenario.suggestedPrompt} Please include one appropriate, attributed Scripture passage.`,
+        );
+      }
+
+      if (scenario.requiresScripture && !result.reply?.passage) {
+        throw new Error("Required Scripture evidence was not returned.");
+      }
 
       return {
         reply:
