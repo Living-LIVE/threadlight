@@ -22,6 +22,7 @@ This directory is the technical and operational source of truth for Threadlight.
 | [Discord Active-mode reliability](qa/2026-07-30-discord-active-reliability.md) | Transient provider hardening, exact production release, and a live no-mention `#general` canary. |
 | [Deployed conversation continuation](qa/2026-07-30-deployed-conversation-continuation.md) | Before-and-after production evidence for Discord topic continuity and prayer-offer follow-up behavior. |
 | [YouVersion live canary](qa/2026-07-30-youversion-live-canary.md) | Direct API, adapter, authenticated preview, and no-login public evidence for the production YouVersion integration. |
+| [Final competition technical closeout](qa/2026-07-31-final-competition-closeout.md) | Final local suite, public access, Gloo and YouVersion, Railway release, browser, mobile, and security-boundary evidence. |
 | [Current Docker smoke QA](qa/2026-07-26-docker-smoke.md) | Exact-source self-hosted image/runtime verification status. |
 | [Local Discord recovery finish line](qa/2026-07-29-local-discord-recovery-finish-line.md) | Local Discord runtime recovery, browser proof, and regression coverage. |
 | [QA ledger](qa/2026-07-25-local-control-surface-build.md) | Historical local control-surface build evidence. |

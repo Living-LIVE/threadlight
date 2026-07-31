@@ -9,8 +9,9 @@ Threadlight is designed around the challenge's YouVersion Platform and Gloo AI S
 blocks inside existing conversation habits rather than introducing another destination to manage.
 The current live demo uses the verified Gloo plus YouVersion provider pair.
 
-**Handoff status:** The public product and repository are deployed and ready for review. Do not
-submit yet: the public Kaggle notebook, public video, and final media attachments remain open.
+**Handoff status:** The code, public product, live connectors, required provider pair, public
+Discord entry, and technical QA are complete. Do not submit yet: the public Kaggle notebook,
+public video, final media attachments, and final Kaggle form remain open.
 
 ## What Eric Submits
 
@@ -18,6 +19,7 @@ submit yet: the public Kaggle notebook, public video, and final media attachment
 | --- | --- | --- |
 | Source code | [GitHub repository](https://github.com/Living-LIVE/threadlight) | Submit this repository URL. |
 | Hosted dashboard | [Threadlight live dashboard](https://threadlight-production.up.railway.app/?demo=public) | Visitors can use the no-login full public workspace, open the live Discord/YouTube destinations, and observe sanitized activity without gaining operator access. |
+| Live Discord | [Join Live Tapestry](https://discord.gg/CmxDN9Qud4) | Use this non-expiring invite for the interactive Discord segment. |
 | Kaggle notebook | [Notebook instructions](../notebook/README.md) and `notebook/threadlight_demo.ipynb` | Publish the notebook and add its URL below. |
 | Demo video | Demo script below | Record/upload and add its public URL below. |
 | Cover image and media gallery | [Prepared gallery assets](competition-assets.md), plus a controlled Discord/YouTube walkthrough | Upload to the competition form. |
@@ -66,7 +68,7 @@ data with an attributed passage without exposing operator credentials.
 - [x] One owner-approved reply canary completed on the test video.
 - [x] Gloo provider configured and demonstrated in the dashboard/runtime.
 - [x] Hosted Discord runtime launched against the dedicated demo thread.
-- [ ] Public Discord invite added to the live dashboard.
+- [x] Public Discord invite added to the live dashboard and verified from the no-login workspace.
 - [x] Hosted public activity and protected control boundaries reverified after deployment.
 - [x] Public source repository and reproducible self-hosted setup available.
 - [x] Valid YouVersion App Key installed and attributed hosted/public retrieval verified.
@@ -83,3 +85,4 @@ data with an attributed passage without exposing operator credentials.
 - [Competition gallery asset manifest](competition-assets.md)
 - [Notebook run instructions](../notebook/README.md)
 - [Notebook execution evidence](qa/2026-07-26-competition-finish.md)
+- [Final competition technical closeout](qa/2026-07-31-final-competition-closeout.md)

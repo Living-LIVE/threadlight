@@ -63,7 +63,7 @@ not be described as available in demos, issues, or release notes.
   This proves the one-comment happy path only; it is not a broad moderation or safety evaluation.
 - YouVersion is active in Railway production with Bible `3034` (BSB). An authenticated provider
   preview and the no-login public grief scenario both completed attributed passage canaries through
-  Gloo plus YouVersion on 2026-07-30. The App Key remains write-only and is not returned by APIs.
+  Gloo plus YouVersion on 2026-07-31. The App Key remains write-only and is not returned by APIs.
 - Docker binds to loopback by default. Remote control requires `THREADLIGHT_CONTROL_TOKEN` and
   should also sit behind an authenticated proxy owned by the operator. Railway production now has
   that token configured: remote configuration, OAuth, drafts, and posting routes return `401`
@@ -76,27 +76,29 @@ not be described as available in demos, issues, or release notes.
   smoke. The evidence is recorded in the [Docker QA ledger](qa/2026-07-26-docker-smoke.md).
 - Railway production serves the complete bundled public app at
   `https://threadlight-production.up.railway.app/?demo=public`. Discord and YouTube are both ready,
-  and a hosted Discord no-mention Active-mode canary from `#general` appears in the public activity
-  ledger. Vercel was not updated because Threadlight is not yet registered in the required Vercel
-  target registry.
+  a non-expiring public Discord invite is visible in Monitoring, and a hosted Discord no-mention
+  Active-mode canary from `#general` appears in the public activity ledger. Vercel was not updated
+  because Threadlight is not yet registered in the required Vercel target registry.
 
 ## Production Checkpoint
 
 The current production release is source revision
-`8b5d3c8152efefbd105e683981708cbb2f2e5374`, deployed to Railway as
-`08674910-2067-4f00-9c17-7320829499ad` on 2026-07-30.
+`dcc1e6857cbfd11ab0689249c2e9d72885f2b251`, deployed to Railway as
+`e1eb1443-1911-483d-aef9-918a001f4d99` on 2026-07-31.
 
 Deployment verification established:
 
 - Railway reported `SUCCESS` with one running replica.
 - `/api/health` and the complete no-login public workspace returned `200`.
-- Discord reported enabled, ready, and running.
+- `/api/health` reported the active saved `gloo + youversion` provider pair.
+- Discord reported enabled, ready, and running; its public invite resolved successfully.
 - The configured `#general` destination reported Active mode.
+- YouTube reported ready and running against the selected real `We Paint!` video.
 - A plain message with no bot mention was observed, queued, and answered through Gloo plus AO Lab.
 - A two-turn parenting canary stayed on the current topic, asked permission to pray, and converted
   the next standalone `yes please` into the promised contextual prayer.
 - The public grief scenario returned Psalm 34:18 (BSB) with explicit YouVersion attribution and a
-  `gloo + youversion` trace.
+  `gloo + youversion` trace; all five processing stages completed.
 - `/api/control/status` returned `401` without operator authorization.
 
 This checkpoint proves production rollout and readiness. Feature behavior remains supported by
@@ -104,6 +106,8 @@ separate local and hosted QA ledgers. See [Deployment and operations](deployment
 [Discord Active-mode reliability ledger](qa/2026-07-30-discord-active-reliability.md).
 The exact two-turn acceptance evidence is in the
 [deployed conversation-continuation ledger](qa/2026-07-30-deployed-conversation-continuation.md).
+The final submission-facing verification is in the
+[competition technical closeout ledger](qa/2026-07-31-final-competition-closeout.md).
 
 ## Verification
 

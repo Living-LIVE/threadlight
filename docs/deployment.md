@@ -12,24 +12,23 @@ complete container to a host that supports persistent processes and durable stor
 | Service | `threadlight` |
 | Environment | `production` |
 | Source branch | `codex/build-threadlight` |
-| Source revision | `8b5d3c8152efefbd105e683981708cbb2f2e5374` |
-| Railway deployment | `08674910-2067-4f00-9c17-7320829499ad` |
-| Image digest | `sha256:6d01d97653bbb4206c8ce6ac07942a88570ce5042f26a0fd246c08d6eaaada0d` |
-| Verified | 2026-07-30 |
+| Source revision | `dcc1e6857cbfd11ab0689249c2e9d72885f2b251` |
+| Railway deployment | `e1eb1443-1911-483d-aef9-918a001f4d99` |
+| Image digest | `sha256:6cd21f2c6dd04d28620613354b15c0db4b8a52256c9b18285c365debd4d84419` |
+| Verified | 2026-07-31 |
 
 That deployment reached Railway `SUCCESS` with one running replica. The public workspace and
 health endpoint returned `200`, the Discord runtime reported enabled, ready, and running, and the
-operator control endpoint returned `401` without authorization. The live deployment used the
-repository `railway.json` to select the root Dockerfile. A plain, unmentioned message in the
-configured `#general` channel produced an automatic Active-mode response through the saved Gloo
-and AO Lab providers. A deployed two-turn continuation canary then confirmed that a parenting
-reflection led to a prayer invitation and that a standalone `yes please` produced the promised
-contextual prayer.
+operator control endpoint returned `401` without authorization. Health reported the active saved
+`gloo + youversion` provider pair. Monitoring exposed a working public Discord invite, an Active
+`#general` gateway, and a ready YouTube poller attached to the selected `We Paint!` video. The
+no-login grief scenario returned attributed Psalm 34:18 (BSB) with all five trace stages complete.
+The live deployment used the repository `railway.json` to select the root Dockerfile and retained
+the existing `/data` volume.
 
 On 2026-07-30, the saved Scripture provider was changed from AO Lab to YouVersion after the
-existing App Key began passing direct API canaries. The active application deployment did not
-change. An authenticated preview and no-login public scenario both returned attributed BSB
-passages through `gloo + youversion`; see the
+existing App Key began passing direct API canaries. An authenticated preview and no-login public
+scenario both returned attributed BSB passages through `gloo + youversion`; see the
 [YouVersion provider canary](qa/2026-07-30-youversion-live-canary.md).
 
 This is deployment evidence, not a substitute for feature QA. The current local feature evidence
@@ -38,6 +37,8 @@ production Discord canary is recorded in the
 [Active-mode reliability ledger](qa/2026-07-30-discord-active-reliability.md).
 The two-turn topic and prayer continuity evidence is recorded in the
 [conversation-continuation ledger](qa/2026-07-30-deployed-conversation-continuation.md).
+The final local suite and production judge-path evidence are recorded in the
+[competition technical closeout ledger](qa/2026-07-31-final-competition-closeout.md).
 
 ## Runtime Topology
 

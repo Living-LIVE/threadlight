@@ -22,11 +22,11 @@ No database, billing, permission, role, ownership, or RLS changes are in scope.
 | Public Git default branch | Passed | Local HEAD and remote default branch both resolved to `73ba7728c649090d95607b3daaca4f51bf96e5f9` at start. |
 | Baseline canonical local suite | Passed | `pnpm test:full`: 22 test files, 95 assertions, all builds, and 6 Playwright journeys passed. |
 | Active saved provider pair | Passed | Authenticated control status reported configured `gloo + youversion`; both deployments were running and ready. |
-| Public judged provider scenario | Locally repaired | The default scenario now explicitly invites Scripture, retries once when passage evidence is absent, and fails closed if the second response still omits it. |
-| Public Discord entry | Configured, awaiting release | A non-expiring invite for Live Tapestry `#general` is stored as the Railway `THREADLIGHT_DISCORD_INVITE_URL` value with deploy suppression. |
+| Public judged provider scenario | Passed | The deployed default scenario returned attributed Psalm 34:18 (BSB) through `gloo + youversion`; all five trace stages completed. |
+| Public Discord entry | Passed | A non-expiring Live Tapestry `#general` invite is visible in Monitoring and resolves successfully. |
 | Final local suite | Passed | `pnpm test:full`: 22 test files, 98 assertions, all builds, and 6 Playwright journeys passed. |
-| Production-safe acceptance | Pending | Verify health, public workspace, provider trace, invite, Discord/YouTube readiness, and protected control boundary. |
-| Final source and deployment | Pending | Commit, push, deploy exact revision, and record Railway evidence. |
+| Production-safe acceptance | Passed | Health, public workspace, live status, provider response, Discord invite, and YouTube video returned `200`; unauthenticated control returned `401`. |
+| Final source and deployment | Passed | Revision `dcc1e6857cbfd11ab0689249c2e9d72885f2b251` deployed as Railway `e1eb1443-1911-483d-aef9-918a001f4d99`. |
 
 ## Safety And Approval
 
@@ -55,7 +55,28 @@ not replaced or modified outside Threadlight's own control configuration.
   empty. Secrets were not copied out of hosted storage.
 - Authenticated production provider preview: passed with Psalm 34:18 (BSB), attribution present,
   `gloo + youversion`, and all five trace stages completed.
-- Production deployment and retest: pending.
+- Production deployment: Railway `e1eb1443-1911-483d-aef9-918a001f4d99` reached `SUCCESS` with
+  image digest `sha256:6cd21f2c6dd04d28620613354b15c0db4b8a52256c9b18285c365debd4d84419`
+  and one running instance.
+- Production API retest: health, public app, public live state, public provider response, and the
+  Discord invite returned `200`; unauthenticated control returned `401`.
+- Production browser retest: Overview, Monitoring, Review, Join Discord, `We Paint!`, live
+  response, attribution, and `gloo + youversion` trace were visible without login. Browser console
+  errors: zero.
+- Mobile production retest: Review and primary navigation remained visible at `390x844`; document
+  width stayed within the viewport.
+
+## Final Truth Matrix
+
+| Surface | Result |
+| --- | --- |
+| Local source | Canonical deterministic and Playwright suite passed at `dcc1e68`. |
+| Public Git | `codex/build-threadlight` is the public default branch and contains `dcc1e68`. |
+| Railway production | Exact revision `dcc1e68` is active in deployment `e1eb1443-1911-483d-aef9-918a001f4d99`. |
+| Provider state | Saved runtime pair is configured `gloo + youversion`; attributed passage canary passed. |
+| Discord | Gateway is running in Active mode; public invite and channel links are visible. |
+| YouTube | Poller is running against the selected real `We Paint!` video with selective automatic replies. |
+| Access boundary | Public judge workspace requires no login; control routes remain protected. |
 
 ## Remaining Owner Uploads
 
