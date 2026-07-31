@@ -90,9 +90,15 @@ controlled comment from a separate Google/YouTube identity.
   - Public reply ID: `UgyZa6Is7PWeCsyPSfh4AaABAg.AZwCzqr263wAZwD4R_fxfq`
   - Public reply URL:
     `https://www.youtube.com/watch?v=hiuP2zXds2s&lc=UgyZa6Is7PWeCsyPSfh4AaABAg.AZwCzqr263wAZwD4R_fxfq`
-- Repair and deployment: IN PROGRESS
-  - The live story exposed no Threadlight code defect. Focused regression checks and the
-    documentation-only production release remain.
+- Repair and deployment: PASS
+  - The live story exposed no Threadlight code defect.
+  - Focused verification passed: 22 YouTube connector/client/control tests, workspace typecheck,
+    and the monitoring Playwright journey.
+  - Commit `5ff31ad` was pushed and deployed successfully as Railway deployment
+    `4f7b78bd-17f0-4976-9786-9f7349f3c96c`.
+  - After restart, `/api/health` returned `200`; Discord remained running and ready; the public
+    live projection retained the selected YouTube video, Selective policy, and exact
+    `observed`/`posted` acceptance events.
 
 ## Truth Matrix
 
@@ -104,7 +110,7 @@ controlled comment from a separate Google/YouTube identity.
 | External source comment | PASS | Public API and browser agree on `UgyZa6Is7PWeCsyPSfh4AaABAg` |
 | Provider automatic reply | PASS | One `observed` event followed by one `posted` event |
 | Public YouTube reply | PASS | One expanded reply from `@Prestonepope` under the correct parent |
-| Production deployment | IN PROGRESS | Documentation-only revision still requires push and Railway release verification |
+| Production deployment | PASS | Railway `4f7b78bd-17f0-4976-9786-9f7349f3c96c` succeeded and post-release health returned `200` |
 
 ## Stateful Operation Accounting
 
