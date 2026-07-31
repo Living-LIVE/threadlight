@@ -6,13 +6,14 @@ import {
   CirclePause,
   ExternalLink,
   Flame,
+  Inbox,
+  LayoutDashboard,
   LockKeyhole,
   MessageCircle,
   MessageSquareWarning,
   Play,
   Radio,
   RefreshCw,
-  Rocket,
   Settings2,
   Sparkles,
   Users,
@@ -203,10 +204,19 @@ const apiOrigin = (import.meta.env.VITE_THREADLIGHT_API_ORIGIN ?? "").replace(/\
 
 type ControlRequest = <T>(url: string, init?: RequestInit) => Promise<T>;
 type Screen = "home" | "choose" | "connect" | "launch" | "settings" | "access";
+type WorkspaceView = "overview" | "review" | "monitoring";
 
 const ControlRequestContext = createContext<ControlRequest | undefined>(undefined);
 
 class ControlAccessRequiredError extends Error {}
+
+function workspaceViewFromHash(): WorkspaceView {
+  return window.location.hash === "#review"
+    ? "review"
+    : window.location.hash === "#monitoring"
+      ? "monitoring"
+      : "overview";
+}
 
 function youtubeHealth(youtube: NonNullable<Deployment["youtube"]>) {
   const pendingDrafts = youtube.drafts.filter((draft) => draft.status === "pending").length;
@@ -558,6 +568,7 @@ export function App() {
     publicDemo ? publicDemoStatus.current : undefined,
   );
   const [screen, setScreen] = useState<Screen>("choose");
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(workspaceViewFromHash);
   const [controlAccessCode, setControlAccessCode] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
   const [error, setError] = useState<string>();
@@ -590,6 +601,27 @@ export function App() {
     return next;
   }, [controlRequest]);
 
+  const openWorkspace = useCallback((view: WorkspaceView, replace = false) => {
+    setScreen("home");
+    setWorkspaceView(view);
+    setError(undefined);
+    const nextUrl = `${window.location.pathname}${window.location.search}#${view}`;
+    window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
+  }, []);
+
+  useEffect(() => {
+    const restoreWorkspace = () => {
+      setWorkspaceView(workspaceViewFromHash());
+      setScreen("home");
+    };
+    window.addEventListener("popstate", restoreWorkspace);
+    window.addEventListener("hashchange", restoreWorkspace);
+    return () => {
+      window.removeEventListener("popstate", restoreWorkspace);
+      window.removeEventListener("hashchange", restoreWorkspace);
+    };
+  }, []);
+
   useEffect(() => {
     void refresh()
       .then((next) => {
@@ -602,6 +634,7 @@ export function App() {
         );
         setSelectedId(route.selectedId);
         setScreen(route.screen);
+        if (route.screen === "home") setWorkspaceView(workspaceViewFromHash());
         if (route.notice) setError(route.notice);
         if (youtubeResult) window.history.replaceState({}, "", window.location.pathname);
       })
@@ -664,6 +697,16 @@ export function App() {
     <ControlRequestContext.Provider value={controlRequest}>
       <main className="app-shell">
         <Header
+          activeView={screen === "home" ? workspaceView : undefined}
+          reviewCount={status.configuration.deployments.reduce(
+            (count, deployment) =>
+              count +
+              (deployment.youtube?.drafts.filter(
+                (draft) => draft.status === "pending" || draft.status === "failed",
+              ).length ?? 0),
+            0,
+          )}
+          onNavigate={openWorkspace}
           onSettings={() => setScreen("settings")}
           onManage={publicDemo ? () => setScreen("access") : undefined}
           onExit={
@@ -700,6 +743,7 @@ export function App() {
             catalog={status.catalog}
             busy={busy}
             publicDemo={publicDemo}
+            onCancel={() => openWorkspace("overview")}
             onChoose={createDeployment}
           />
         )}
@@ -707,7 +751,9 @@ export function App() {
           <ConnectDestination
             deployment={selected}
             youtubeOAuthConfigured={status.youtubeOAuthConfigured}
-            onBack={() => setScreen("choose")}
+            onBack={() =>
+              selected.state === "running" ? openWorkspace("overview") : setScreen("choose")
+            }
             onContinue={() => setScreen("launch")}
             onSaved={refresh}
             onError={setError}
@@ -736,6 +782,9 @@ export function App() {
           <LiveDashboard
             status={status}
             publicDemo={publicDemo}
+            view={workspaceView}
+            onNavigate={openWorkspace}
+            onRefresh={refresh}
             onAdd={() => {
               setError(undefined);
               setSuccess(undefined);
@@ -788,11 +837,17 @@ export function App() {
 }
 
 function Header({
+  activeView,
+  reviewCount,
+  onNavigate,
   onSettings,
   onManage,
   onExit,
   context = "Local control",
 }: {
+  activeView?: WorkspaceView;
+  reviewCount?: number;
+  onNavigate?: (view: WorkspaceView) => void;
   onSettings: () => void;
   onManage?: () => void;
   onExit?: () => void;
@@ -800,10 +855,54 @@ function Header({
 }) {
   return (
     <header className="topbar">
-      <div className="brand">
+      <button
+        className="brand"
+        type="button"
+        onClick={() => onNavigate?.("overview")}
+        aria-label="Threadlight overview"
+      >
         <Flame size={19} />
         <span>Threadlight</span>
-      </div>
+      </button>
+      {onNavigate && (
+        <nav className="primary-nav" aria-label="Primary navigation">
+          <button
+            type="button"
+            aria-label="Overview"
+            className={activeView === "overview" ? "selected" : ""}
+            aria-current={activeView === "overview" ? "page" : undefined}
+            onClick={() => onNavigate("overview")}
+          >
+            <LayoutDashboard size={16} />
+            <span>Overview</span>
+          </button>
+          <button
+            type="button"
+            aria-label="Review"
+            className={activeView === "review" ? "selected" : ""}
+            aria-current={activeView === "review" ? "page" : undefined}
+            onClick={() => onNavigate("review")}
+          >
+            <Inbox size={16} />
+            <span>Review</span>
+            {Boolean(reviewCount) && (
+              <span className="nav-count" aria-hidden="true">
+                {reviewCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            aria-label="Monitoring"
+            className={activeView === "monitoring" ? "selected" : ""}
+            aria-current={activeView === "monitoring" ? "page" : undefined}
+            onClick={() => onNavigate("monitoring")}
+          >
+            <Activity size={16} />
+            <span>Monitoring</span>
+          </button>
+        </nav>
+      )}
       <div className="topbar-actions">
         <span className="local-state">
           <i />
@@ -938,11 +1037,13 @@ function ChooseDestination({
   catalog,
   busy,
   publicDemo,
+  onCancel,
   onChoose,
 }: {
   catalog: ControlStatus["catalog"];
   busy: boolean;
   publicDemo: boolean;
+  onCancel: () => void;
   onChoose: (kind: DestinationKind) => void;
 }) {
   return (
@@ -985,6 +1086,11 @@ function ChooseDestination({
           );
         })}
       </section>
+      <div className="form-actions destination-actions">
+        <button type="button" className="text-button" onClick={onCancel}>
+          Cancel setup
+        </button>
+      </div>
       <p className="local-note">
         <LockKeyhole size={15} />
         {publicDemo
@@ -1524,6 +1630,9 @@ function YouTubeConnection({
           </div>
           {deployment.state === "running" ? (
             <div className="form-actions">
+              <button type="button" className="text-button" onClick={onBack} disabled={busy}>
+                Back to overview
+              </button>
               <button
                 type="button"
                 className="text-button"
@@ -1563,48 +1672,6 @@ function YouTubeConnection({
           )}
           {saved?.lastError && <p className="error-copy">{saved.lastError}</p>}
           {saved?.lastSafetyAlert && <p className="status-note">{saved.lastSafetyAlert}</p>}
-          {saved?.drafts
-            .filter((draft) => draft.status === "pending" || draft.status === "failed")
-            .map((draft) => (
-              <article className="deployment-row" key={draft.id}>
-                <div>
-                  <strong>
-                    {draft.authorName} {draft.status === "failed" ? "· Needs attention" : ""}
-                  </strong>
-                  <small className="draft-label">Original comment</small>
-                  <small>{draft.commentText}</small>
-                  <small className="draft-label">Proposed reply</small>
-                  <small>{draft.replyText}</small>
-                  {draft.error && <small className="error-copy">{draft.error}</small>}
-                </div>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() =>
-                    void action(
-                      `/api/control/deployments/${deployment.id}/youtube/drafts/${draft.id}/reject`,
-                    )
-                  }
-                  disabled={busy}
-                >
-                  {draft.status === "failed" ? "Dismiss" : "Reject"}
-                </button>
-                {draft.status === "pending" && (
-                  <button
-                    type="button"
-                    className="primary"
-                    onClick={() =>
-                      void action(
-                        `/api/control/deployments/${deployment.id}/youtube/drafts/${draft.id}/approve`,
-                      )
-                    }
-                    disabled={busy}
-                  >
-                    Post reply
-                  </button>
-                )}
-              </article>
-            ))}
         </>
       )}
     </section>
@@ -2151,20 +2218,23 @@ function SettingsPanel({
 function LiveDashboard({
   status,
   publicDemo,
+  view,
+  onNavigate,
+  onRefresh,
   onAdd,
   onOpen,
   onPause,
 }: {
   status: ControlStatus;
   publicDemo: boolean;
+  view: WorkspaceView;
+  onNavigate: (view: WorkspaceView) => void;
+  onRefresh: () => Promise<ControlStatus>;
   onAdd: () => void;
   onOpen: (deployment: Deployment) => void;
   onPause: (id: string) => Promise<void>;
 }) {
   const request = useControlRequest();
-  const [view, setView] = useState<"deployments" | "activity">(
-    publicDemo ? "activity" : "deployments",
-  );
   const [prompt, setPrompt] = useState(
     "I feel overwhelmed today. Could you offer a brief reflection?",
   );
@@ -2196,19 +2266,27 @@ function LiveDashboard({
     <section className="dashboard">
       <div className="dashboard-heading">
         <div>
-          <p className="eyebrow">{publicDemo ? "Public demo workspace" : "Local control"}</p>
-          <h1>Threadlight</h1>
+          <p className="eyebrow">{publicDemo ? "Public demo workspace" : "Threadlight control"}</p>
+          <h1>
+            {view === "overview" ? "Overview" : view === "review" ? "Review queue" : "Monitoring"}
+          </h1>
           <p className="lede">
-            {publicDemo
-              ? "A Scripture-grounded companion that brings thoughtful presence into live Discord and YouTube conversations."
-              : "Your deployments stay on this machine."}
+            {view === "overview"
+              ? publicDemo
+                ? "A Scripture-grounded companion active across live Discord and YouTube conversations."
+                : "Manage destinations and verify your configured providers."
+              : view === "review"
+                ? "Inspect proposed replies, resolve failures, and revisit recent decisions."
+                : "Follow connector health, responses, intentional skips, and errors."}
           </p>
         </div>
-        <button className="primary" type="button" onClick={onAdd}>
-          Add destination <ArrowRight size={17} />
-        </button>
+        {view === "overview" && (
+          <button className="primary" type="button" onClick={onAdd}>
+            Add destination <ArrowRight size={17} />
+          </button>
+        )}
       </div>
-      {publicDemo && (
+      {publicDemo && view === "overview" && (
         <section className="judge-proof" aria-label="Hackathon demo proof">
           <div>
             <p className="eyebrow">Scripture in New Frontiers</p>
@@ -2227,28 +2305,34 @@ function LiveDashboard({
           </div>
         </section>
       )}
-      <nav className="workspace-tabs" aria-label="Threadlight workspace">
-        <button
-          type="button"
-          className={view === "deployments" ? "selected" : ""}
-          aria-current={view === "deployments" ? "page" : undefined}
-          onClick={() => setView("deployments")}
-        >
-          <Rocket size={16} /> Deployments
-        </button>
-        <button
-          type="button"
-          className={view === "activity" ? "selected" : ""}
-          aria-current={view === "activity" ? "page" : undefined}
-          onClick={() => setView("activity")}
-        >
-          <Activity size={16} /> Monitoring
-        </button>
-      </nav>
-      {view === "activity" ? (
+      {view === "monitoring" ? (
         <MonitoringConsole publicDemo={publicDemo} />
+      ) : view === "review" ? (
+        <ReviewQueue status={status} publicDemo={publicDemo} onRefresh={onRefresh} />
       ) : (
         <>
+          <section className="workspace-shortcuts" aria-label="Workspace shortcuts">
+            <button type="button" onClick={() => onNavigate("review")}>
+              <span className="route-icon">
+                <Inbox size={19} />
+              </span>
+              <span>
+                <strong>Review queue</strong>
+                <small>Proposed YouTube replies and recent decisions</small>
+              </span>
+              <ArrowRight size={17} />
+            </button>
+            <button type="button" onClick={() => onNavigate("monitoring")}>
+              <span className="route-icon">
+                <Activity size={19} />
+              </span>
+              <span>
+                <strong>Monitoring</strong>
+                <small>Live health, responses, skipped messages, and errors</small>
+              </span>
+              <ArrowRight size={17} />
+            </button>
+          </section>
           <section className="deployment-list">
             <div className="list-title">
               <h2>{publicDemo ? "Configuration playground" : "Destinations"}</h2>
@@ -2391,6 +2475,209 @@ function LiveDashboard({
           ? "Demo state is stored only in this browser tab."
           : "Configuration is stored in your local Threadlight volume."}
       </div>
+    </section>
+  );
+}
+
+type ReviewRow = {
+  key: string;
+  deploymentId?: string;
+  draftId?: string;
+  destinationName: string;
+  authorName: string;
+  commentText: string;
+  replyText: string;
+  status: "pending" | "posted" | "rejected" | "skipped" | "failed";
+  error?: string;
+};
+
+function ReviewQueue({
+  status,
+  publicDemo,
+  onRefresh,
+}: {
+  status: ControlStatus;
+  publicDemo: boolean;
+  onRefresh: () => Promise<ControlStatus>;
+}) {
+  const controlRequest = useControlRequest();
+  const [live, setLive] = useState<PublicLiveStatus>();
+  const [error, setError] = useState<string>();
+  const [busyId, setBusyId] = useState<string>();
+
+  const load = useCallback(async () => {
+    try {
+      setLive(
+        publicDemo
+          ? await request<PublicLiveStatus>("/api/demo/live")
+          : await controlRequest<PublicLiveStatus>("/api/control/activity"),
+      );
+      setError(undefined);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Review history is unavailable.");
+    }
+  }, [controlRequest, publicDemo]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const configuredRows: ReviewRow[] = status.configuration.deployments.flatMap((deployment) =>
+    (deployment.youtube?.drafts ?? []).map((draft) => ({
+      key: `${deployment.id}-${draft.id}`,
+      deploymentId: deployment.id,
+      draftId: draft.id,
+      destinationName: deployment.name,
+      authorName: draft.authorName,
+      commentText: draft.commentText,
+      replyText: draft.replyText,
+      status: draft.status,
+      ...(draft.error ? { error: draft.error } : {}),
+    })),
+  );
+  const liveRows: ReviewRow[] = (live?.youtube.recentComments ?? []).map((comment) => ({
+    key: `${comment.createdAt}-${comment.authorName}`,
+    destinationName: live?.youtube.channelName ?? live?.youtube.name ?? "YouTube Comments",
+    authorName: comment.authorName,
+    commentText: comment.commentText,
+    replyText: comment.replyText,
+    status: comment.status,
+    ...(comment.error ? { error: comment.error } : {}),
+  }));
+  const rows = publicDemo ? liveRows : configuredRows.length ? configuredRows : liveRows;
+  const pending = rows.filter((row) => row.status === "pending" || row.status === "failed");
+  const history = rows.filter((row) => row.status !== "pending" && row.status !== "failed");
+
+  const resolve = async (row: ReviewRow, action: "approve" | "reject") => {
+    if (!row.deploymentId || !row.draftId) return;
+    setBusyId(row.key);
+    setError(undefined);
+    try {
+      await controlRequest(
+        `/api/control/deployments/${row.deploymentId}/youtube/drafts/${row.draftId}/${action}`,
+        { method: "POST" },
+      );
+      await onRefresh();
+      await load();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Threadlight could not update the reply.",
+      );
+    } finally {
+      setBusyId(undefined);
+    }
+  };
+
+  return (
+    <section className="review-console" aria-labelledby="review-queue-heading">
+      <section className="review-summary" aria-label="Review summary">
+        <div>
+          <strong>{pending.filter((row) => row.status === "pending").length}</strong>
+          <span>Awaiting review</span>
+        </div>
+        <div>
+          <strong>{pending.filter((row) => row.status === "failed").length}</strong>
+          <span>Needs attention</span>
+        </div>
+        <div>
+          <strong>{history.length}</strong>
+          <span>Recent decisions</span>
+        </div>
+      </section>
+      {error && <p className="live-error">{error}</p>}
+      <div className="review-section-heading">
+        <div>
+          <h2 id="review-queue-heading">Awaiting review</h2>
+          <p>Replies remain private until approved.</p>
+        </div>
+        <button
+          className="icon-button"
+          type="button"
+          aria-label="Refresh review queue"
+          onClick={() => void load()}
+        >
+          <RefreshCw size={17} />
+        </button>
+      </div>
+      {pending.length === 0 ? (
+        <div className="review-empty" role="status">
+          <CheckCircle2 size={18} />
+          <div>
+            <strong>Review queue is clear.</strong>
+            <p>New review-required replies will appear here.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="review-list">
+          {pending.map((row) => (
+            <article className={`review-row ${row.status}`} key={row.key}>
+              <div className="review-row-heading">
+                <strong>{row.authorName}</strong>
+                <span>
+                  {row.destinationName} ·{" "}
+                  {row.status === "failed" ? "Needs attention" : "Awaiting review"}
+                </span>
+              </div>
+              <div className="review-exchange">
+                <div>
+                  <small>Comment</small>
+                  <p>{row.commentText}</p>
+                </div>
+                <div>
+                  <small>Proposed reply</small>
+                  <blockquote>{row.replyText}</blockquote>
+                </div>
+              </div>
+              {row.error && <p className="error-copy">{row.error}</p>}
+              {!publicDemo && row.deploymentId && row.draftId && (
+                <div className="review-actions">
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={busyId === row.key}
+                    onClick={() => void resolve(row, "reject")}
+                  >
+                    {row.status === "failed" ? "Dismiss" : "Reject"}
+                  </button>
+                  {row.status === "pending" && (
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busyId === row.key}
+                      onClick={() => void resolve(row, "approve")}
+                    >
+                      Post reply
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+      <div className="review-section-heading history-heading">
+        <div>
+          <h2>Recent decisions</h2>
+          <p>Posted, rejected, and skipped YouTube replies.</p>
+        </div>
+      </div>
+      {history.length === 0 ? (
+        <p className="activity-empty">No recent review decisions.</p>
+      ) : (
+        <div className="review-history">
+          {history.map((row) => (
+            <article className="review-history-row" key={row.key}>
+              <span className={`review-status ${row.status}`}>{row.status}</span>
+              <div>
+                <strong>{row.authorName}</strong>
+                <small>{row.destinationName}</small>
+                <p>{row.commentText}</p>
+                <small>{row.replyText}</small>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -2642,24 +2929,6 @@ function MonitoringConsole({ publicDemo }: { publicDemo: boolean }) {
               </article>
             ))}
           </div>
-          {live.youtube.recentComments.length > 0 && (
-            <details className="youtube-history">
-              <summary>Recent YouTube review history</summary>
-              {live.youtube.recentComments.map((comment) => (
-                <div
-                  className="youtube-history-row"
-                  key={`${comment.createdAt}-${comment.authorName}`}
-                >
-                  <strong>
-                    {comment.authorName} · {comment.status}
-                  </strong>
-                  <p>{comment.commentText}</p>
-                  <small>{comment.replyText}</small>
-                  {comment.error && <small className="error-copy">{comment.error}</small>}
-                </div>
-              ))}
-            </details>
-          )}
         </>
       )}
     </section>

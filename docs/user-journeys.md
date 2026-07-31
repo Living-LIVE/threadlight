@@ -1,7 +1,7 @@
 # Core User Journeys
 
-Threadlight has three primary web application journeys. They share one lightweight dashboard but
-have different completion signals.
+Threadlight has four primary web application journeys. Overview, Review, and Monitoring remain
+available in the persistent application navigation while setup and connector editing are open.
 
 ## 1. Setup
 
@@ -33,14 +33,30 @@ will start.
 3. Run a private provider check. This must return successfully and does not post to a destination.
 4. Launch the deployment.
 5. Return to the dashboard with a visible success notice.
-6. Edit or pause the deployment from the Deployments workspace.
+6. Edit or pause the deployment from Overview.
 
 **Completion signal:** runtime state is `Live`, not merely saved or configured.
 
 **Recovery:** a failed launch keeps the operator on the review screen and explains the missing
 provider, connection, or runtime requirement.
 
-## 3. Monitoring
+## 3. Review
+
+**Goal:** decide which proposed YouTube replies should be posted and resolve failed replies without
+searching through connector configuration.
+
+1. Open Review from the persistent application navigation.
+2. Scan the awaiting-review, needs-attention, and recent-decision counts.
+3. Compare the original comment with the proposed reply.
+4. Post, reject, or dismiss the reply when operating an unlocked Threadlight deployment.
+5. Revisit posted, rejected, and skipped decisions in review history.
+
+**Completion signal:** the actionable queue is clear or every remaining item has an understood
+owner and next action.
+
+The public demo exposes sanitized review history without operator actions.
+
+## 4. Monitoring
 
 **Goal:** understand whether Threadlight is healthy, what it processed, what it intentionally
 skipped, and what needs attention.
@@ -51,7 +67,7 @@ skipped, and what needs attention.
 4. Filter recent activity by Discord, YouTube, or errors.
 5. Inspect observed messages, generated responses, Scripture references, provider traces,
    intentional skips, and public-safe errors.
-6. Return to Deployments to edit or pause a destination.
+6. Return to Overview to edit or pause a destination, or open Review for reply decisions.
 
 **Completion signal:** the operator can explain the current runtime state and identify whether any
 action is needed.
@@ -60,7 +76,7 @@ action is needed.
 
 The public workspace uses the same Monitoring journey against a sanitized read-only API. Visitors
 can open the selected Discord and YouTube destinations but cannot change real configuration or call
-operator actions. Its Deployments workspace is a browser-only configuration playground. A
+operator actions. Its Overview workspace includes a browser-only configuration playground. A
 deployment operator can choose **Manage**, enter the server's control access code, and transition
 into the protected workspace. That code is held in browser memory only and is cleared when the
 operator exits control or reloads the page.
