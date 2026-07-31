@@ -61,14 +61,14 @@ not be described as available in demos, issues, or release notes.
 - YouTube Comments has completed live Google OAuth, owner-comment suppression, and one controlled
   non-owner review-draft and approved-threaded-reply canary on the selected `We Paint!` video.
   This proves the one-comment happy path only; it is not a broad moderation or safety evaluation.
-- The YouVersion App Key was retried after its owner made it live, but the hosted provider preview
-  still could not form a response. The running deployment has been restored to the verified AO Lab
-  fallback. The YouVersion adapter therefore still lacks a live passage-retrieval canary.
+- YouVersion is active in Railway production with Bible `3034` (BSB). An authenticated provider
+  preview and the no-login public grief scenario both completed attributed passage canaries through
+  Gloo plus YouVersion on 2026-07-30. The App Key remains write-only and is not returned by APIs.
 - Docker binds to loopback by default. Remote control requires `THREADLIGHT_CONTROL_TOKEN` and
   should also sit behind an authenticated proxy owned by the operator. Railway production now has
   that token configured: remote configuration, OAuth, drafts, and posting routes return `401`
   without it. The public dashboard falls back to a browser-isolated full demo workspace without
-  that code. Its bounded provider preview uses the saved Gloo plus AO Lab provider pair and
+  that code. Its bounded provider preview uses the saved Gloo plus YouVersion provider pair and
   requires `THREADLIGHT_DEMO_ENABLED=true`. The first anonymous scenario and a second warm scenario
   both returned `200` on 2026-07-29; details are recorded in the
   [public demo recovery ledger](qa/2026-07-29-public-demo-recovery.md).
@@ -95,6 +95,8 @@ Deployment verification established:
 - A plain message with no bot mention was observed, queued, and answered through Gloo plus AO Lab.
 - A two-turn parenting canary stayed on the current topic, asked permission to pray, and converted
   the next standalone `yes please` into the promised contextual prayer.
+- The public grief scenario returned Psalm 34:18 (BSB) with explicit YouVersion attribution and a
+  `gloo + youversion` trace.
 - `/api/control/status` returned `401` without operator authorization.
 
 This checkpoint proves production rollout and readiness. Feature behavior remains supported by

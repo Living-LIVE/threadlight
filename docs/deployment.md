@@ -26,6 +26,12 @@ and AO Lab providers. A deployed two-turn continuation canary then confirmed tha
 reflection led to a prayer invitation and that a standalone `yes please` produced the promised
 contextual prayer.
 
+On 2026-07-30, the saved Scripture provider was changed from AO Lab to YouVersion after the
+existing App Key began passing direct API canaries. The active application deployment did not
+change. An authenticated preview and no-login public scenario both returned attributed BSB
+passages through `gloo + youversion`; see the
+[YouVersion provider canary](qa/2026-07-30-youversion-live-canary.md).
+
 This is deployment evidence, not a substitute for feature QA. The current local feature evidence
 is recorded in the [full-suite QA ledger](qa/2026-07-29-full-suite-local.md), and the exact
 production Discord canary is recorded in the

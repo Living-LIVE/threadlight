@@ -20,8 +20,8 @@ reply excerpts locally until the operator resolves them.
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Discord | Available | One configured Discord destination per Threadlight installation. |
-| OpenAI, Gloo, AO Lab | Available | Configured locally through Threadlight; the hosted Gloo plus AO Lab preview has completed a live canary. |
-| YouVersion | Adapter implemented | Configured locally through Threadlight; live use requires an active App Key and operator authorization for AI-generated output. |
+| OpenAI, Gloo, AO Lab | Available | Configured locally through Threadlight; the hosted Gloo provider has completed live canaries. |
+| YouVersion | Available | The hosted Gloo plus YouVersion preview and public demo have completed attributed live passage canaries. |
 | Local setup dashboard | Available | Credentials are stored locally and returned only as configured/not-configured state. |
 | Provider preview | Available | Runs a bounded test response through the saved provider pair without sending to a destination. |
 | Gemini, Bonfire | Configuration-ready | Settings can be saved locally; runtime adapters are not yet included. |

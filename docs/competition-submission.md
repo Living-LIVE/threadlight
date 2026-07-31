@@ -7,12 +7,10 @@
 **Challenge fit:** Social & Emerging Interfaces, with a Creator & Content Tools secondary fit.
 Threadlight is designed around the challenge's YouVersion Platform and Gloo AI Studio building
 blocks inside existing conversation habits rather than introducing another destination to manage.
-The current live demo uses the verified Gloo plus AO Lab provider pair; do not claim a live
-YouVersion retrieval until its passage canary succeeds.
+The current live demo uses the verified Gloo plus YouVersion provider pair.
 
 **Handoff status:** The public product and repository are deployed and ready for review. Do not
-submit yet: the mandatory YouVersion proof, public Kaggle notebook, public video, and final media
-attachments remain open.
+submit yet: the public Kaggle notebook, public video, and final media attachments remain open.
 
 ## What Eric Submits
 
@@ -43,10 +41,9 @@ Threadlight is a self-hosted, Scripture-native companion for shared digital conv
 
 For Discord, Threadlight can be Prompted, Attentive, or Active. For YouTube, a channel owner signs in with Google, chooses exactly which videos Threadlight should watch, and receives reply drafts by default before anything is posted publicly. Sensitive or urgent comments are never queued or published automatically.
 
-The project uses Gloo for values-aligned AI routing and AO Lab for the currently verified,
-attributed Scripture retrieval path. The YouVersion adapter is implemented but remains unverified
-in production. Threadlight is packaged as an open-source, self-hosted Docker application with a
-lightweight local control dashboard.
+The project uses Gloo for values-aligned AI routing and YouVersion for verified, attributed
+Scripture retrieval. Threadlight is packaged as an open-source, self-hosted Docker application
+with a lightweight local control dashboard.
 
 ## Demo Script
 
@@ -59,8 +56,8 @@ Target length: 2 minutes 30 seconds to 3 minutes.
 5. Run a bounded Gloo and Scripture response, then point out the attributed passage and provider trace.
 6. Close with the build story: an open-source reference implementation that works inside existing community habits.
 
-Do not record the final provider segment until YouVersion can be shown doing real attributed
-retrieval. The required APIs are part of submission validity, not an optional future-roadmap item.
+Use the public grief scenario for the provider segment. It returns real Gloo and YouVersion trace
+data with an attributed passage without exposing operator credentials.
 
 ## Pre-Submission Checklist
 
@@ -72,7 +69,7 @@ retrieval. The required APIs are part of submission validity, not an optional fu
 - [ ] Public Discord invite added to the live dashboard.
 - [x] Hosted public activity and protected control boundaries reverified after deployment.
 - [x] Public source repository and reproducible self-hosted setup available.
-- [ ] Valid YouVersion App Key installed and one attributed Scripture retrieval verified.
+- [x] Valid YouVersion App Key installed and attributed hosted/public retrieval verified.
 - [ ] Kaggle notebook published and its URL recorded above.
 - [ ] Demo video, cover image, and gallery uploaded.
 - [ ] Final form reviewed for links, team attribution, and required disclosures.
@@ -82,6 +79,7 @@ retrieval. The required APIs are part of submission validity, not an optional fu
 - [Local full-suite ledger](qa/2026-07-26-full-suite-local.md)
 - [YouTube connector QA](qa/2026-07-26-youtube-comments-connector.md)
 - [Competition readiness notes](competition-readiness.md)
+- [YouVersion live canary](qa/2026-07-30-youversion-live-canary.md)
 - [Competition gallery asset manifest](competition-assets.md)
 - [Notebook run instructions](../notebook/README.md)
 - [Notebook execution evidence](qa/2026-07-26-competition-finish.md)

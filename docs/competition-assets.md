@@ -13,7 +13,8 @@ no credentials, private browser chrome, or unpublished comment content.
 The current deployed-flow evidence is preserved under
 [`qa/assets/2026-07-29-hackathon-demo-audit`](qa/assets/2026-07-29-hackathon-demo-audit/).
 Use it for review and recording preparation. Recapture final gallery images only after the local
-judge-facing improvements are deployed and the YouVersion canary is complete.
+judge-facing improvements are deployed. The YouVersion canary is complete, so the provider frames
+should be recaptured with the current Gloo plus YouVersion trace.
 
 ## Recommended Gallery Order
 
@@ -27,6 +28,6 @@ judge-facing improvements are deployed and the YouVersion canary is complete.
 ## Recording Notes
 
 - Keep the dashboard's browser window free of personal tabs and credentials.
-- Use the configured Gloo plus AO Lab pair for the currently verified live provider moment.
-- Do not represent YouVersion as live until a valid App Key has completed an attributed passage canary.
+- Use the configured Gloo plus YouVersion pair for the verified live provider moment.
+- Keep the provider trace and YouVersion attribution visible without exposing the App Key.
 - Do not show or publish comments from people who have not approved the demonstration.
